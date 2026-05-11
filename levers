@@ -10,12 +10,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
+import os
 import re
+import select
 import subprocess
 import sys
+import termios
 import time
+import tty
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -159,6 +164,339 @@ def _die(msg: str, code: int = 2) -> int:
 
 def _warn(msg: str) -> None:
     typer.echo(f"warning: {msg}", err=True)
+
+
+# ---------------------------------------------------------------------------
+# Interactive editor (TUI)
+# ---------------------------------------------------------------------------
+#
+# Hand-rolled, stdlib-only. POSIX-only (termios/tty). The script is already
+# POSIX-only via its `uv run --script` shebang, so no regression.
+#
+# Bindings: ↑/↓ select row, ←/→ cycle the selected lever's value through
+# its schema-declared enum (wrap-around), ENTER write, ESC (or Ctrl-C) cancel.
+
+
+class _Key(Enum):
+    UP = "up"
+    DOWN = "down"
+    LEFT = "left"
+    RIGHT = "right"
+    ENTER = "enter"
+    ESC = "esc"
+    OTHER = "other"
+
+
+def _classify_byte(byte: int) -> _Key:
+    """Map a single non-escape input byte to a _Key. Pure."""
+    if byte in (0x0a, 0x0d):
+        return _Key.ENTER
+    if byte == 0x03:  # Ctrl-C — treat as cancel
+        return _Key.ESC
+    return _Key.OTHER
+
+
+def _classify_escape(tail: bytes) -> _Key:
+    """Map an escape-sequence tail (the bytes after \\x1b) to a _Key. Pure."""
+    if tail == b"[A":
+        return _Key.UP
+    if tail == b"[B":
+        return _Key.DOWN
+    if tail == b"[C":
+        return _Key.RIGHT
+    if tail == b"[D":
+        return _Key.LEFT
+    return _Key.OTHER
+
+
+def _read_key(fd: int) -> _Key:
+    """Blocking single-key read from a tty fd."""
+    b = os.read(fd, 1)
+    if not b:
+        return _Key.OTHER
+    first = b[0]
+    if first != 0x1b:
+        return _classify_byte(first)
+    # ESC byte — bare ESC, or start of an arrow-key sequence. Peek briefly
+    # to disambiguate.
+    r, _, _ = select.select([fd], [], [], 0.05)
+    if not r:
+        return _Key.ESC
+    tail = os.read(fd, 6)
+    if not tail:
+        return _Key.ESC
+    return _classify_escape(tail)
+
+
+def _advance(values: list[str], current: Optional[str], direction: int) -> str:
+    """Cycle through `values` from `current` by `direction` (+1 or -1), wrap-around.
+
+    If `current` isn't in `values` (unset, or invalid declared value), step
+    onto the first enum value. Pure.
+    """
+    if current not in values:
+        return values[0]
+    i = values.index(current)
+    return values[(i + direction) % len(values)]
+
+
+def _infer_role(data: dict, schema: Schema) -> Role:
+    """Infer the role of a .levers.yml from the scopes of the keys it declares.
+
+    `repo`-scoped key present + no `package`-scoped key → root.
+    `package`-scoped key present + no `repo`-scoped key → package.
+    Both, neither, or only `either`-scoped keys → single. Pure.
+    """
+    repo_keys = {k for k, v in schema.levers.items() if v["scope"] == "repo"}
+    pkg_keys = {k for k, v in schema.levers.items() if v["scope"] == "package"}
+    has_repo = any(k in data for k in repo_keys)
+    has_pkg = any(k in data for k in pkg_keys)
+    if has_repo and not has_pkg:
+        return Role.root
+    if has_pkg and not has_repo:
+        return Role.package
+    return Role.single
+
+
+def _allowed_scopes(role: Role) -> set[str]:
+    if role is Role.root:
+        return {"repo", "either"}
+    if role is Role.package:
+        return {"package", "either"}
+    return {"repo", "package", "either"}
+
+
+class _Entry:
+    """One row in the editor — either a category header or a lever row."""
+
+    __slots__ = ("kind", "label", "key")
+
+    def __init__(self, kind: str, label: str, key: Optional[str] = None) -> None:
+        self.kind = kind  # "header" | "row"
+        self.label = label
+        self.key = key
+
+
+def _build_entries(schema: Schema, role: Role) -> list[_Entry]:
+    """Walk schema in category order, emitting header + row entries for `role`."""
+    allowed = _allowed_scopes(role)
+    out: list[_Entry] = []
+    for cat_id, keys in schema.keys_by_category().items():
+        keys = [k for k in keys if schema.scope(k) in allowed]
+        if not keys:
+            continue
+        out.append(_Entry("header", schema.category_label(cat_id)))
+        for k in keys:
+            out.append(_Entry("row", k, key=k))
+    return out
+
+
+def _first_row(entries: list[_Entry]) -> int:
+    for i, e in enumerate(entries):
+        if e.kind == "row":
+            return i
+    return 0
+
+
+def _next_row(entries: list[_Entry], idx: int, direction: int) -> int:
+    """Move to the next/previous selectable row, skipping headers and wrapping."""
+    n = len(entries)
+    if n == 0:
+        return 0
+    i = idx
+    for _ in range(n):
+        i = (i + direction) % n
+        if entries[i].kind == "row":
+            return i
+    return idx
+
+
+def _supports_color() -> bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
+
+
+def _ansi(text: str, code: str, enabled: bool) -> str:
+    return f"{code}{text}\x1b[0m" if enabled else text
+
+
+_C_BOLD = "\x1b[1m"
+_C_DIM = "\x1b[2m"
+_C_YELLOW = "\x1b[33m"
+_C_CYAN = "\x1b[36m"
+_C_RESET = "\x1b[0m"
+# Anchor highlight: gray bg + bright white fg — subtle, signals "saved value".
+_C_ANCHOR = "\x1b[100m\x1b[97m"
+# Focus highlight: reverse video — prominent, signals "cursor position".
+_C_FOCUS = "\x1b[7m"
+
+
+def _render_value_strip(
+    values: list[str],
+    anchor: Optional[str],
+    focus: Optional[str],
+    color: bool,
+) -> str:
+    """Render one row's enum as a horizontal strip with anchor + focus highlights.
+
+    `anchor` is what survives ESC (the file's saved value, may be None for
+    unset rows). `focus` is where ←/→ currently sits (saves on ENTER, may
+    be None for an unset+untouched row). When the two coincide, focus wins.
+    Pure.
+    """
+    cells: list[str] = []
+    for v in values:
+        if v == focus and color:
+            cells.append(f"{_C_FOCUS} {v} {_C_RESET}")
+        elif v == focus:
+            cells.append(f"[{v}]")
+        elif v == anchor and color:
+            cells.append(f"{_C_ANCHOR} {v} {_C_RESET}")
+        elif v == anchor:
+            cells.append(f"({v})")
+        else:
+            cells.append(f" {v} ")
+    return " ".join(cells)
+
+
+def _render(
+    title: str,
+    entries: list[_Entry],
+    selected: int,
+    current: dict[str, Optional[str]],
+    initial: dict[str, Optional[str]],
+    schema: Schema,
+    color: bool,
+) -> str:
+    """Build the full editor screen as a string. Pure."""
+    lines: list[str] = [_ansi(title, _C_BOLD, color), ""]
+    for i, e in enumerate(entries):
+        if e.kind == "header":
+            lines.append("")
+            lines.append(_ansi(f"  {e.label}", _C_DIM, color))
+            continue
+        key = e.key  # type: ignore[assignment]
+        assert key is not None
+        cur = current.get(key)
+        init = initial.get(key)
+        is_row_focus = i == selected
+        is_changed = cur != init
+        row_marker = _ansi("►", _C_CYAN, color) if is_row_focus else " "
+        change_mark = _ansi("*", _C_YELLOW, color) if is_changed else " "
+        label = key.ljust(22)
+        strip = _render_value_strip(schema.values_for(key), anchor=init, focus=cur, color=color)
+        lines.append(f"{row_marker} {change_mark} {label} {strip}")
+    lines.append("")
+    lines.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
+    if color:
+        lines.append(
+            f"  {_C_FOCUS} focus {_C_RESET}{_C_DIM} saves on enter    {_C_RESET}"
+            f"{_C_ANCHOR} anchor {_C_RESET}{_C_DIM} restored on esc{_C_RESET}"
+        )
+    else:
+        lines.append("  [focus] saves on enter    (anchor) restored on esc")
+    return "\n".join(lines)
+
+
+@contextlib.contextmanager
+def _tty_session(fd: int):
+    """Enter cbreak + alt-screen + hidden-cursor mode; restore on exit."""
+    old = termios.tcgetattr(fd)
+    sys.stdout.write("\x1b[?1049h\x1b[?25l")
+    sys.stdout.flush()
+    try:
+        tty.setcbreak(fd)
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+
+
+def _tui_edit(
+    *,
+    title: str,
+    schema: Schema,
+    role: Role,
+    initial: dict,
+) -> Optional[list[tuple[str, Optional[str], str]]]:
+    """Run the interactive editor.
+
+    Returns None on cancel, or a list of (key, old_value, new_value) changes
+    on save. `old_value` is None for keys that weren't declared in `initial`.
+    """
+    entries = _build_entries(schema, role)
+    if not any(e.kind == "row" for e in entries):
+        return []
+
+    current: dict[str, Optional[str]] = {}
+    snapshot: dict[str, Optional[str]] = {}
+    for e in entries:
+        if e.kind == "row":
+            assert e.key is not None
+            current[e.key] = initial.get(e.key)
+            snapshot[e.key] = initial.get(e.key)
+
+    selected = _first_row(entries)
+    fd = sys.stdin.fileno()
+    color = _supports_color()
+    cancelled = False
+
+    def _redraw() -> None:
+        sys.stdout.write("\x1b[H\x1b[2J")
+        sys.stdout.write(_render(title, entries, selected, current, snapshot, schema, color))
+        sys.stdout.flush()
+
+    with _tty_session(fd):
+        try:
+            _redraw()
+            while True:
+                key = _read_key(fd)
+                if key is _Key.ESC:
+                    cancelled = True
+                    break
+                if key is _Key.ENTER:
+                    break
+                if key is _Key.UP:
+                    selected = _next_row(entries, selected, -1)
+                elif key is _Key.DOWN:
+                    selected = _next_row(entries, selected, +1)
+                elif key in (_Key.LEFT, _Key.RIGHT):
+                    e = entries[selected]
+                    if e.kind == "row":
+                        assert e.key is not None
+                        values = schema.values_for(e.key)
+                        direction = -1 if key is _Key.LEFT else +1
+                        current[e.key] = _advance(values, current[e.key], direction)
+                else:
+                    continue
+                _redraw()
+        except KeyboardInterrupt:
+            cancelled = True
+
+    if cancelled:
+        return None
+
+    changes: list[tuple[str, Optional[str], str]] = []
+    for k, v in current.items():
+        if v is None:
+            continue
+        old = snapshot.get(k)
+        if old != v:
+            changes.append((k, old, v))
+    return changes
+
+
+def _print_change_summary(
+    target: Path,
+    changes: list[tuple[str, Optional[str], str]],
+    header: str,
+) -> None:
+    typer.echo(header)
+    for k, old, new in changes:
+        if old is None:
+            typer.echo(f"  {k}: (added) {new}")
+        else:
+            typer.echo(f"  {k}: {old} → {new}")
 
 
 # ---------------------------------------------------------------------------
@@ -378,16 +716,60 @@ def get(
 
 @app.command("set")
 def set_(
-    key: str = typer.Argument(..., help="Lever key to write."),
-    value: str = typer.Argument(..., help="New value (must be in the key's enum)."),
+    key: Optional[str] = typer.Argument(None, help="Lever key to write. Omit (with value) to open the interactive editor."),
+    value: Optional[str] = typer.Argument(None, help="New value (must be in the key's enum)."),
     at: Optional[Path] = typer.Option(
         None,
         "--at",
         help="Path to .levers.yml (or directory containing one). Defaults to ./.levers.yml.",
     ),
 ) -> None:
-    """Set a single lever value, preserving existing comments and layout."""
+    """Set lever values, preserving existing comments and layout.
+
+    Two forms:
+      levers set <key> <value>   non-interactive, single key
+      levers set                 interactive editor over the whole file
+    """
     schema = _load_schema()
+    target = resolve_levers_path(at)
+    if not target.exists():
+        raise typer.Exit(_die(f"{target} not found — run `levers init` first"))
+
+    # Interactive mode: no positional args.
+    if key is None and value is None:
+        if not sys.stdin.isatty():
+            raise typer.Exit(
+                _die("`levers set` requires <key> <value> when stdin isn't a tty")
+            )
+        data = load_yaml(target)
+        role = _infer_role(data, schema)
+        changes = _tui_edit(
+            title=f"levers set — {target}  (role={role.value})",
+            schema=schema,
+            role=role,
+            initial=data,
+        )
+        if changes is None:
+            typer.echo("cancelled: no changes written", err=True)
+            return
+        if not changes:
+            typer.echo(f"ok: {target} (no changes)")
+            return
+        for k, _, new in changes:
+            data[k] = new
+        dump_yaml(data, target)
+        header = (
+            f"ok: {target} — {len(changes)} change{'s' if len(changes) != 1 else ''}"
+        )
+        _print_change_summary(target, changes, header)
+        return
+
+    # Non-interactive single-key form requires both args.
+    if key is None or value is None:
+        raise typer.Exit(
+            _die("provide both <key> and <value>, or neither (interactive editor)")
+        )
+
     if key not in schema.levers:
         raise typer.Exit(_die(f"unknown key: {key}"))
 
@@ -395,12 +777,6 @@ def set_(
     if value not in allowed:
         raise typer.Exit(
             _die(f"invalid value {value!r} for {key} — allowed: {', '.join(allowed)}")
-        )
-
-    target = resolve_levers_path(at)
-    if not target.exists():
-        raise typer.Exit(
-            _die(f"{target} not found — run `levers init` first")
         )
 
     data = load_yaml(target)
@@ -457,8 +833,18 @@ def init(
         "--force",
         help="Overwrite an existing .levers.yml.",
     ),
+    no_interactive: bool = typer.Option(
+        False,
+        "--no-interactive",
+        help="Skip the interactive editor and write the template as-is.",
+    ),
 ) -> None:
-    """Create a new .levers.yml from a template."""
+    """Create a new .levers.yml from a template.
+
+    By default, opens an interactive editor seeded with the template's
+    default values: ↑/↓ select, ←/→ cycle values, ENTER save, ESC cancel.
+    Pass --no-interactive (or pipe stdin) to write the template verbatim.
+    """
     if role is Role.package:
         raise typer.Exit(
             _die(
@@ -472,8 +858,45 @@ def init(
         raise typer.Exit(_die(f"{at_dir} is not a directory"))
 
     target = at_dir / DEFAULT_FILENAME
-    _write_template(role, target, force)
-    typer.echo(f"ok: wrote {target} (role={role.value})")
+    src = _template_path(role)
+    if not src.exists():
+        raise typer.Exit(_die(f"template not found: {src}"))
+    if target.exists() and not force:
+        raise typer.Exit(
+            _die(f"{target} already exists — pass --force to overwrite", code=1)
+        )
+
+    if no_interactive or not sys.stdin.isatty():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(src.read_bytes())
+        typer.echo(f"ok: wrote {target} (role={role.value})")
+        return
+
+    schema = _load_schema()
+    data = load_yaml(src)
+    changes = _tui_edit(
+        title=f"levers init — {target}  (role={role.value})",
+        schema=schema,
+        role=role,
+        initial=data,
+    )
+    if changes is None:
+        typer.echo("cancelled: no changes written", err=True)
+        return
+
+    for k, _, new in changes:
+        data[k] = new
+    target.parent.mkdir(parents=True, exist_ok=True)
+    dump_yaml(data, target)
+
+    if not changes:
+        typer.echo(f"ok: wrote {target} (role={role.value})")
+        return
+    header = (
+        f"ok: wrote {target} (role={role.value}, "
+        f"{len(changes)} tweak{'s' if len(changes) != 1 else ''} from template)"
+    )
+    _print_change_summary(target, changes, header)
 
 
 # ---------------------------------------------------------------------------

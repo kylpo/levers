@@ -105,6 +105,33 @@ def test_set_preserves_comments(run, single_repo: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Interactive editor — non-interactive escape hatches and TTY guards
+# ---------------------------------------------------------------------------
+
+
+def test_init_no_interactive_flag(run, tmp_repo: Path) -> None:
+    """--no-interactive writes the template verbatim, identical to the template."""
+    r = run("init", "--no-interactive", cwd=tmp_repo).assert_ok()
+    target = tmp_repo / ".levers.yml"
+    assert target.is_file()
+    template = (Path(__file__).resolve().parent.parent / "templates" / "single.yml").read_bytes()
+    assert target.read_bytes() == template
+    assert "wrote" in r.stdout
+
+
+def test_set_no_args_requires_tty(run, single_repo: Path) -> None:
+    """Without a TTY, `levers set` (no args) must error rather than hang."""
+    r = run("set", cwd=single_repo).assert_fails(2)
+    assert "tty" in r.stderr
+
+
+def test_set_only_key_arg_errors(run, single_repo: Path) -> None:
+    """`set <key>` (no value) must error — half-specified is ambiguous."""
+    r = run("set", "ci_gate", cwd=single_repo).assert_fails(2)
+    assert "both" in r.stderr or "value" in r.stderr
+
+
+# ---------------------------------------------------------------------------
 # list-enums
 # ---------------------------------------------------------------------------
 

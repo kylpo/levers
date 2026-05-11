@@ -39,12 +39,14 @@ Requirements: Python ≥ 3.12 and `uv` on `PATH`.
 ```bash
 # Bootstrap a new project
 cd my-project
-levers init                                  # writes .levers.yml from the template
+levers init                                  # interactive editor seeded from the template
+levers init --no-interactive                 # or write the template verbatim
 levers validate                              # confirm the schema is satisfied
 
 # Read / write
 levers get ci_gate                           # → none
-levers set ci_gate gates_merge               # change the value, preserve comments
+levers set                                   # interactive editor over the whole file
+levers set ci_gate gates_merge               # or set one key directly (preserves comments)
 levers get ci_gate                           # → gates_merge
 
 # Listing the schema (for prompts, interviews, scripting)
@@ -56,6 +58,8 @@ levers list-enums --role root --format yaml  # filter + machine-readable
 levers audit                                 # warn on declared-vs-observed mismatch
 levers audit --strict                        # exit 1 on any warning (for CI)
 ```
+
+The interactive editor (`levers init`, `levers set` with no args) binds: ↑/↓ to select a row, ←/→ to cycle the selected lever through its enum, ENTER to save, ESC (or Ctrl-C) to cancel. Comments and ordering survive round-trips. When stdin isn't a TTY, `init` falls back to writing the template verbatim and `set` requires `<key> <value>`.
 
 ## Monorepos
 
