@@ -1,0 +1,140 @@
+# schema.yml — single source of truth for .levers.yml lever keys.
+#
+# Drives:
+#   - `levers validate`        — enum + scope checks per role (single|root|package)
+#   - `levers list-enums`      — grouped, scope-annotated output
+#   - `levers resolve --merge-strictest` — strictness ordering across packages
+#   - `levers init` / `add-package`      — required-key enforcement per role
+#
+# Scope:
+#   repo      — declared only at the root .levers.yml
+#   package   — declared only at per-package .levers.yml files
+#   either    — may be declared at root (project-wide default) and/or
+#               overridden per package
+#
+# Strictness (optional): values listed strictest → loosest. Used by
+# `--merge-strictest` to pick a single value when a change set spans
+# multiple packages. Keys without a meaningful strictness ordering omit
+# the field; --merge-strictest fails if asked to merge them across
+# packages.
+
+categories:
+  lifecycle:
+    label: Lifecycle & risk
+  team:
+    label: Team & collaboration
+  planning:
+    label: Planning & execution
+  quality:
+    label: Quality
+  release:
+    label: Release & delivery
+  automation:
+    label: Automation
+  documentation:
+    label: Documentation
+  workspace:
+    label: Workspace
+
+levers:
+  # --- Lifecycle & risk ---
+  lifecycle_stage:
+    scope: package
+    category: lifecycle
+    values: [prototype, pre_launch, post_launch, mature]
+    strictness: [mature, post_launch, pre_launch, prototype]
+
+  # --- Team & collaboration ---
+  team_mode:
+    scope: repo
+    category: team
+    values: [solo, small_team, large_team]
+
+  review_cadence:
+    scope: repo
+    category: team
+    values: [sync, async]
+
+  # --- Planning & execution ---
+  planning_horizon:
+    scope: either
+    category: planning
+    values: [big_bang, phased, just_in_time]
+    strictness: [big_bang, phased, just_in_time]
+
+  # --- Quality ---
+  test_strategy:
+    scope: either
+    category: quality
+    values: [coverage_delta, test_after, manual_only]
+    strictness: [coverage_delta, test_after, manual_only]
+
+  manual_qa_capture:
+    scope: package
+    category: quality
+    values: [captured, not_captured]
+    strictness: [captured, not_captured]
+
+  ci_gate:
+    scope: either
+    category: quality
+    values: [none, advisory, gates_merge]
+    strictness: [gates_merge, advisory, none]
+
+  code_review:
+    scope: either
+    category: quality
+    values: [none, subagent, subagent_advisory]
+    strictness: [subagent_advisory, subagent, none]
+
+  # --- Release & delivery ---
+  release_model:
+    scope: package
+    category: release
+    values: [continuous, batched_timeline, batched_feature_scoped, release_branch]
+    strictness: [release_branch, batched_timeline, batched_feature_scoped, continuous]
+
+  branch_strategy:
+    scope: repo
+    category: release
+    values: [trunk_based, gitflow, feature_branches_plus_trunk]
+
+  release_cadence:
+    scope: package
+    category: release
+    values: [on_demand, weekly, biweekly, monthly, milestone]
+
+  versioning:
+    scope: package
+    category: release
+    values: [semver, calver, adhoc]
+
+  # --- Automation ---
+  agent_auto_merge:
+    scope: either
+    category: automation
+    values: [none, low_risk_only, all]
+    strictness: [none, low_risk_only, all]
+
+  bug_intake:
+    scope: repo
+    category: automation
+    values: [manual, funneled]
+
+  # --- Documentation ---
+  changelog_style:
+    scope: package
+    category: documentation
+    values: [commit_log, curated]
+
+  doc_sync:
+    scope: either
+    category: documentation
+    values: [none, inline, subagent, subagent_advisory]
+    strictness: [subagent_advisory, subagent, inline, none]
+
+  # --- Workspace ---
+  workspace_isolation:
+    scope: repo
+    category: workspace
+    values: [worktree, branch, none]
