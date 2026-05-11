@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import io
 import json
+import re
+import subprocess
 import sys
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -751,6 +754,281 @@ def add_package(
     target = pkg_dir / DEFAULT_FILENAME
     _write_template(Role.package, target, force)
     typer.echo(f"ok: wrote {target}")
+
+
+# ---------------------------------------------------------------------------
+# audit — drift detection
+# ---------------------------------------------------------------------------
+
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$")
+_AUDIT_SKIP_DIRS = {".git", "node_modules", ".build", "DerivedData", ".venv"}
+
+
+def _git(repo: Path, *args: str) -> Optional[str]:
+    """Run `git -C repo args...`. Returns stripped stdout, or None on error."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def _tag_matches_package(pkg_basename: str, tag: str) -> bool:
+    """True iff tag looks like '<pkg>-v...' or '<pkg>/v...'."""
+    return tag.startswith(f"{pkg_basename}-v") or tag.startswith(f"{pkg_basename}/v")
+
+
+def _workflows_dir(repo_root: Path) -> Optional[Path]:
+    d = repo_root / ".github" / "workflows"
+    return d if d.is_dir() else None
+
+
+def _workflows_have_push_or_pr(workflows_dir: Path) -> bool:
+    pattern = re.compile(r"^\s*(push|pull_request)\s*:", re.MULTILINE)
+    for f in workflows_dir.rglob("*.y*ml"):
+        try:
+            if pattern.search(f.read_text()):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _workflows_mention(workflows_dir: Path, *needles: str) -> bool:
+    for f in workflows_dir.rglob("*.y*ml"):
+        try:
+            content = f.read_text()
+        except OSError:
+            continue
+        if any(n in content for n in needles):
+            return True
+    return False
+
+
+def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
+    """Drift warnings for the root .levers.yml. Returns (context, message) tuples."""
+    warnings: list[tuple[str, str]] = []
+    root_file = repo_root / DEFAULT_FILENAME
+    if not root_file.is_file():
+        raise typer.Exit(_die(f"{root_file} not found"))
+
+    try:
+        data = load_yaml(root_file)
+    except Exception as exc:
+        raise typer.Exit(_die(f"failed to parse {root_file}: {exc}"))
+
+    # team_mode: solo vs >1 authors in last 90 days
+    if data.get("team_mode") == "solo":
+        out = _git(repo_root, "log", "--since=90 days ago", "--format=%ae")
+        if out:
+            authors = {line for line in out.splitlines() if line}
+            if len(authors) > 1:
+                warnings.append((
+                    "root",
+                    f"declared `team_mode: solo`, observed {len(authors)} unique "
+                    "authors in the last 90 days — flip to small_team/large_team, or "
+                    "explain in DECISIONS.",
+                ))
+
+    # ci_gate: none vs push/pull_request workflows
+    if data.get("ci_gate") == "none":
+        wf = _workflows_dir(repo_root)
+        if wf is not None and _workflows_have_push_or_pr(wf):
+            warnings.append((
+                "root",
+                "declared `ci_gate: none`, observed push/pull_request workflows "
+                "under .github/workflows — if CI actually gates merges, flip ci_gate "
+                "(or override per-package).",
+            ))
+
+    return warnings
+
+
+def _audit_package(repo_root: Path, pkg_dir: Path) -> list[tuple[str, str]]:
+    """Drift warnings for a single package .levers.yml."""
+    warnings: list[tuple[str, str]] = []
+    pkg_file = pkg_dir / DEFAULT_FILENAME
+    if not pkg_file.is_file():
+        raise typer.Exit(_die(f"{pkg_file} not found"))
+
+    try:
+        data = load_yaml(pkg_file)
+    except Exception as exc:
+        raise typer.Exit(_die(f"failed to parse {pkg_file}: {exc}"))
+
+    try:
+        rel = str(pkg_dir.resolve().relative_to(repo_root.resolve()))
+    except ValueError:
+        rel = str(pkg_dir)
+    basename = pkg_dir.name
+
+    # Tag-based checks (lifecycle_stage + versioning)
+    tags_out = _git(
+        repo_root,
+        "for-each-ref",
+        "--sort=creatordate",
+        "--format=%(creatordate:unix) %(refname:short)",
+        "refs/tags/*",
+    )
+    pkg_tags: list[tuple[int, str]] = []
+    if tags_out:
+        for line in tags_out.splitlines():
+            parts = line.split(maxsplit=1)
+            if len(parts) != 2:
+                continue
+            try:
+                ts = int(parts[0])
+            except ValueError:
+                continue
+            name = parts[1]
+            if _tag_matches_package(basename, name):
+                pkg_tags.append((ts, name))
+
+    # lifecycle_stage vs old v1+ tag
+    lifecycle = data.get("lifecycle_stage")
+    if lifecycle in ("pre_launch", "prototype"):
+        now = int(time.time())
+        for ts, name in pkg_tags:
+            ver = name.rsplit("v", 1)[-1]
+            major = ver.split(".", 1)[0]
+            if major.isdigit() and int(major) >= 1:
+                age_days = (now - ts) // 86400
+                if age_days > 30:
+                    warnings.append((
+                        rel,
+                        f"declared `lifecycle_stage: {lifecycle}`, observed `{name}` "
+                        f"({age_days}d old) — is {rel} actually post_launch?",
+                    ))
+                    break
+
+    # versioning: semver vs latest non-semver-shaped tag
+    if data.get("versioning") == "semver" and pkg_tags:
+        latest = pkg_tags[-1][1]
+        tail = latest.rsplit("v", 1)[-1]
+        if not _SEMVER_RE.match(tail):
+            warnings.append((
+                rel,
+                f"declared `versioning: semver`, latest package tag '{latest}' "
+                "is not semver-shaped.",
+            ))
+
+    # ci_gate (package override) vs workflows referencing this package
+    if data.get("ci_gate") == "none":
+        wf = _workflows_dir(repo_root)
+        if (
+            wf is not None
+            and _workflows_have_push_or_pr(wf)
+            and _workflows_mention(wf, rel, f"{basename}/")
+        ):
+            warnings.append((
+                rel,
+                f"declared `ci_gate: none`, observed a workflow referencing "
+                f"'{rel}' or '{basename}/' — if CI gates merges for this package, "
+                "update the override.",
+            ))
+
+    # Internal contradiction: continuous releases on a milestone cadence
+    if data.get("release_model") == "continuous" and data.get("release_cadence") == "milestone":
+        warnings.append((
+            rel,
+            "declared `release_model: continuous` but `release_cadence: milestone` "
+            "— these contradict.",
+        ))
+
+    return warnings
+
+
+def _discover_packages(repo_root: Path) -> list[Path]:
+    """Find every nested .levers.yml under repo_root, excluding the root file."""
+    out: list[Path] = []
+    root_abs = repo_root.resolve()
+
+    def walk(d: Path) -> None:
+        if d.name in _AUDIT_SKIP_DIRS:
+            return
+        for entry in d.iterdir():
+            if entry.is_dir():
+                walk(entry)
+            elif entry.name == DEFAULT_FILENAME and entry.parent.resolve() != root_abs:
+                out.append(entry.parent)
+
+    walk(repo_root)
+    return sorted(out)
+
+
+class AuditMode(str, Enum):
+    all = "all"
+    root = "root"
+    package = "package"
+
+
+@app.command()
+def audit(
+    path: Optional[Path] = typer.Argument(
+        None,
+        help="Repo root (default mode) or a specific path (with --root/--package). Defaults to cwd.",
+    ),
+    root_only: bool = typer.Option(
+        False,
+        "--root",
+        help="Audit only the root .levers.yml.",
+    ),
+    package: Optional[Path] = typer.Option(
+        None,
+        "--package",
+        help="Audit only this package directory.",
+    ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Exit non-zero if any drift warnings are emitted (intended for CI).",
+    ),
+) -> None:
+    """Detect drift between declared lever values and observable repo signals.
+
+    Default behavior: audit the root file plus every nested package file.
+    Use --root or --package to restrict the scope. Output is informational;
+    exit code is 0 even on drift unless --strict is set.
+    """
+    if root_only and package is not None:
+        raise typer.Exit(_die("--root and --package are mutually exclusive"))
+
+    target = path if path is not None else Path.cwd()
+    target = target.resolve()
+    warnings: list[tuple[str, str]] = []
+
+    if package is not None:
+        pkg_dir = package.resolve()
+        repo_root = _find_repo_root(pkg_dir)
+        if repo_root is None:
+            raise typer.Exit(
+                _die(f"{pkg_dir} is not inside a git repository")
+            )
+        warnings.extend(_audit_package(repo_root, pkg_dir))
+    elif root_only:
+        warnings.extend(_audit_root(target))
+    else:
+        warnings.extend(_audit_root(target))
+        for pkg_dir in _discover_packages(target):
+            warnings.extend(_audit_package(target, pkg_dir))
+
+    for ctx, msg in warnings:
+        typer.echo(f"⚠ drift ({ctx}): {msg}")
+
+    if not warnings:
+        typer.echo("levers audit: no drift detected")
+        return
+
+    typer.echo(f"levers audit: {len(warnings)} drift warning(s)")
+    if strict:
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
