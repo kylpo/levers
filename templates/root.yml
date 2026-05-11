@@ -1,0 +1,36 @@
+# .levers.yml (root) — repo-wide policy levers for this monorepo.
+# Schema reference: docs/spec.md
+# Validate:        `levers validate --role root`
+# Update triggers: project bootstrap, lifecycle transitions, deliberate
+#                  pipeline reshape. Pair every flip with a DEC-P record
+#                  in the appropriate DECISIONS.md.
+#
+# This file declares REPO-SCOPED keys (how humans/agents operate on the
+# whole repo). Per-package .levers.yml files at apps/*/.levers.yml,
+# packages/*/.levers.yml etc. declare PACKAGE-SCOPED keys. EITHER-SCOPED
+# keys default here and may be overridden per-package.
+
+# --- Team & collaboration (repo-scoped) ---
+team_mode: solo
+review_cadence: async
+
+# --- Planning & execution (either-scoped default) ---
+planning_horizon: phased
+
+# --- Quality (either-scoped defaults) ---
+test_strategy: coverage_delta
+ci_gate: none
+code_review: none
+
+# --- Release & delivery (repo-scoped) ---
+branch_strategy: trunk_based
+
+# --- Automation ---
+agent_auto_merge: low_risk_only   # either-scoped default
+bug_intake: manual                # repo-scoped
+
+# --- Documentation (either-scoped default) ---
+doc_sync: inline
+
+# --- Workspace (repo-scoped) ---
+workspace_isolation: branch

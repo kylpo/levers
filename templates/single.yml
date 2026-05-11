@@ -1,0 +1,39 @@
+# .levers.yml — declared policy levers for this project.
+# Schema reference: docs/spec.md
+# Validate:        `levers validate`
+# Update triggers: project bootstrap, lifecycle transitions, deliberate
+#                  pipeline reshape. Pair every flip with a DEC-P record
+#                  in docs/DECISIONS.md.
+
+# --- Lifecycle & risk ---
+lifecycle_stage: pre_launch
+
+# --- Team & collaboration ---
+team_mode: solo
+review_cadence: async
+
+# --- Planning & execution ---
+planning_horizon: phased
+
+# --- Quality ---
+test_strategy: coverage_delta
+manual_qa_capture: captured
+ci_gate: none
+code_review: none
+
+# --- Release & delivery ---
+release_model: batched_feature_scoped
+branch_strategy: trunk_based
+release_cadence: on_demand
+versioning: semver
+
+# --- Automation ---
+agent_auto_merge: low_risk_only
+bug_intake: manual
+
+# --- Documentation ---
+changelog_style: curated
+doc_sync: inline
+
+# --- Workspace ---
+workspace_isolation: branch
