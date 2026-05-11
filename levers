@@ -535,54 +535,35 @@ def main(
 # ---------------------------------------------------------------------------
 
 
-@app.command()
-def validate(
-    path: Optional[Path] = typer.Argument(
-        None,
-        help="Path to a .levers.yml file (or a directory containing one). Defaults to ./.levers.yml.",
-    ),
-    role: Role = typer.Option(
-        Role.single,
-        "--role",
-        help="Validation role. `single` for a single-repo project; `root`/`package` for monorepos.",
-    ),
-) -> None:
-    """Validate a .levers.yml file against the schema."""
-    schema = _load_schema()
-    target = resolve_levers_path(path)
-
+def _validate_one(target: Path, role: Role, schema: Schema) -> bool:
+    """Validate one .levers.yml file. Prints result. Returns True iff valid."""
     if not target.exists():
-        raise typer.Exit(_die(f"{target} not found"))
-
+        typer.echo(f"✗ {target}: not found")
+        return False
     try:
         data = load_yaml(target)
     except Exception as exc:
-        raise typer.Exit(_die(f"failed to parse {target}: {exc}"))
-
+        typer.echo(f"✗ {target}: failed to parse: {exc}")
+        return False
     if not isinstance(data, dict):
-        raise typer.Exit(_die(f"{target} must be a YAML mapping at the top level"))
+        typer.echo(f"✗ {target}: must be a YAML mapping at the top level")
+        return False
 
     errors: list[str] = []
 
-    # Unknown keys
     unknown = set(data) - set(schema.levers)
     for key in sorted(unknown):
         errors.append(f"unknown key: {key}")
 
-    # Forbidden keys for this role
     forbidden = schema.forbidden_for(role)
     for key in sorted(set(data) & forbidden):
         scope = schema.scope(key)
-        errors.append(
-            f"{key}: {scope}-scoped, not allowed in role={role.value}"
-        )
+        errors.append(f"{key}: {scope}-scoped, not allowed in role={role.value}")
 
-    # Missing required keys
     required = schema.required_for(role)
     for key in sorted(required - set(data)):
         errors.append(f"missing required key: {key} (scope={schema.scope(key)})")
 
-    # Enum violations
     for key, value in data.items():
         if key not in schema.levers:
             continue
@@ -593,12 +574,87 @@ def validate(
             )
 
     if errors:
-        typer.echo(f"✗ {target} ({len(errors)} error{'s' if len(errors) != 1 else ''})")
+        plural = "s" if len(errors) != 1 else ""
+        typer.echo(f"✗ {target} ({len(errors)} error{plural}, role={role.value})")
         for e in errors:
             typer.echo(f"  - {e}")
-        raise typer.Exit(1)
+        return False
 
     typer.echo(f"✓ {target} valid (role={role.value}, {len(data)} keys)")
+    return True
+
+
+def _infer_role_for_root(root_file: Path, has_nested: bool, schema: Schema) -> Role:
+    """Pick a role for the repo-root .levers.yml when none was supplied.
+
+    Nested package files exist → root. Otherwise inspect the file's declared
+    scopes (matches the rule used by the interactive editor).
+    """
+    if has_nested:
+        return Role.root
+    try:
+        data = load_yaml(root_file)
+    except Exception:
+        return Role.single
+    if not isinstance(data, dict):
+        return Role.single
+    return _infer_role(data, schema)
+
+
+@app.command()
+def validate(
+    path: Optional[Path] = typer.Argument(
+        None,
+        help="Path to a .levers.yml file, a directory, or omit to walk the tree from cwd.",
+    ),
+    role: Optional[Role] = typer.Option(
+        None,
+        "--role",
+        help="Override the inferred role. `single` for a single-repo project; `root`/`package` for monorepos.",
+    ),
+) -> None:
+    """Validate `.levers.yml` files against the schema.
+
+    With no arguments, walks the tree from cwd, finds every `.levers.yml`,
+    and infers the role per file (root file → root if nested packages
+    exist, else inferred from declared scopes; nested files → package).
+
+    With `path` (file) or `--role` set, validates a single file with the
+    supplied role (default `single` when only a path is given).
+    """
+    schema = _load_schema()
+
+    # ---- Single-file mode: explicit --role or explicit file path ----
+    if role is not None or (path is not None and path.is_file()):
+        target = resolve_levers_path(path)
+        target_role = role if role is not None else Role.single
+        if not _validate_one(target, target_role, schema):
+            raise typer.Exit(1)
+        return
+
+    # ---- Walk mode ----
+    repo_root = (path if path is not None else Path.cwd()).resolve()
+    root_file = repo_root / DEFAULT_FILENAME
+    if not root_file.is_file():
+        raise typer.Exit(_die(f"{root_file} not found"))
+
+    nested_dirs = _discover_packages(repo_root)
+
+    targets: list[tuple[Path, Role]] = [
+        (root_file, _infer_role_for_root(root_file, bool(nested_dirs), schema)),
+    ]
+    for d in nested_dirs:
+        targets.append((d / DEFAULT_FILENAME, Role.package))
+
+    failed = 0
+    for target, target_role in targets:
+        if not _validate_one(target, target_role, schema):
+            failed += 1
+
+    if failed:
+        plural = "s" if failed != 1 else ""
+        typer.echo(f"levers validate: {failed} file{plural} failed")
+        raise typer.Exit(1)
 
 
 # ---------------------------------------------------------------------------

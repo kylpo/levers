@@ -108,7 +108,7 @@ Schema tables with every enum value: [docs/spec.md § Schema](./docs/spec.md#sch
   `release_cadence: milestone` — these contradict.
 ```
 
-The check list: [docs/drift.md](./docs/drift.md).
+The check list: [docs/drift.md](./docs/drift.md). Drop-in git hooks and a GitHub Actions workflow that wire `audit` into pre-commit / pre-push / CI: [examples/](./examples/).
 
 ## Documentation
 

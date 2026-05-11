@@ -1,0 +1,35 @@
+#!/bin/bash
+# pre-push — strict levers gate: schema validation + drift audit.
+#
+# Runs `levers validate` (blocks on schema errors) then `levers audit
+# --strict` (blocks on drift). Pair with the advisory pre-commit hook in
+# this directory so drift surfaces at commit time but only stops you at
+# push time.
+#
+# Install:
+#     ln -s "$(pwd)/examples/hooks/pre-push" .git/hooks/pre-push
+#     chmod +x .git/hooks/pre-push
+#
+# Bypass:  git push --no-verify
+
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+[ -f .levers.yml ] || exit 0
+
+if ! command -v levers >/dev/null 2>&1; then
+    echo "pre-push: levers not installed — skipping levers checks"
+    echo "(install: https://github.com/kylpo/levers)"
+    exit 0
+fi
+
+# Validate first — a malformed schema makes audit output untrustworthy.
+# Walks the tree like `audit` does, so this covers single-repo and
+# monorepo layouts with no extra config.
+levers validate || exit 1
+
+# `exec` so audit's exit code becomes the hook's exit code with no extra
+# stack frame.
+exec levers audit --strict

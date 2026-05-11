@@ -1,0 +1,55 @@
+# levers-audit.yml — gate merges on `.levers.yml` schema + drift.
+#
+# Two checks, both blocking:
+# - `levers validate` — schema correctness (YAML well-formed, keys
+#   recognized, values in their enums). A malformed file is a bug, not
+#   drift.
+# - `levers audit --strict` — declared values vs. observable repo
+#   signals (git authors, tags, workflow triggers). Exit non-zero on
+#   any drift.
+#
+# Pair with branch-protection requiring this check to land both
+# schema errors and drift as merge blockers.
+#
+# Drop in `.github/workflows/levers-audit.yml` of any repo that has
+# checked in a `.levers.yml`. No secrets required — the levers repo is
+# public.
+#
+# Single-repo and monorepo layouts both work as-is: `levers validate`
+# walks the tree and infers role per file the same way `audit` does.
+
+name: levers-audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      # Drift checks read git log (team_mode) and tag history (lifecycle,
+      # versioning). Shallow clones miss both — fetch the full history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # levers is a single-file PEP 723 script run via uv. Without uv on
+      # the runner, the script fails with `/usr/bin/env: 'uv': No such
+      # file or directory`.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Clone the levers repo and put its `levers` script on PATH. The
+      # script self-bootstraps its Python deps via uv on first run.
+      - name: Install levers
+        run: |
+          git clone --depth 1 https://github.com/kylpo/levers.git "$RUNNER_TEMP/levers"
+          chmod +x "$RUNNER_TEMP/levers/levers"
+          echo "$RUNNER_TEMP/levers" >> "$GITHUB_PATH"
+
+      - name: levers validate
+        run: levers validate
+
+      - name: levers audit --strict
+        run: levers audit --strict

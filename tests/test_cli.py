@@ -52,9 +52,29 @@ def test_validate_passes_on_template(run, single_repo: Path) -> None:
     assert "valid" in r.stdout
 
 
-def test_validate_fails_with_role_mismatch(run, monorepo: Path) -> None:
-    # Root file shouldn't validate as 'single' — missing package-scoped keys.
+def test_validate_walks_monorepo_with_inferred_roles(run, monorepo: Path) -> None:
+    # Bare `validate` should discover the root file plus every nested
+    # package file and infer the right role for each — root + 2 packages.
+    r = run("validate", cwd=monorepo).assert_ok()
+    assert "role=root" in r.stdout
+    assert r.stdout.count("role=package") == 2
+
+
+def test_validate_walk_reports_per_file_failure(run, monorepo: Path) -> None:
+    # Corrupt one package file. Walk mode should validate the rest and
+    # exit non-zero with a per-file failure summary.
+    (monorepo / "apps" / "mobile" / ".levers.yml").write_text("ci_gate: bogus\n")
     r = run("validate", cwd=monorepo).assert_fails(1)
+    assert "invalid value" in r.stdout
+    assert "1 file failed" in r.stdout
+
+
+def test_validate_explicit_role_single_still_fails_on_monorepo_root(
+    run, monorepo: Path
+) -> None:
+    # The override path remains: forcing --role single on a root-style
+    # file still surfaces the missing package-scoped keys.
+    r = run("validate", "--role", "single", cwd=monorepo).assert_fails(1)
     assert "missing required key" in r.stdout
 
 

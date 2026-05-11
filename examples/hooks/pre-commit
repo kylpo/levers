@@ -1,0 +1,49 @@
+#!/bin/bash
+# pre-commit — validate schema, then advisory drift check.
+#
+# `levers validate` blocks the commit on schema errors (malformed YAML,
+# unknown keys, enum violations) — those aren't drift, they're bugs.
+# `levers audit` surfaces drift warnings without blocking; the strict
+# variant lives in `pre-push` (and in CI, see
+# examples/github-actions/levers-audit.yml).
+#
+# Install (symlink so updates here propagate):
+#     ln -s "$(pwd)/examples/hooks/pre-commit" .git/hooks/pre-commit
+#     chmod +x .git/hooks/pre-commit
+#
+# Or copy if you'd rather edit per-repo:
+#     cp examples/hooks/pre-commit .git/hooks/pre-commit
+#
+# Bypass:  git commit --no-verify
+
+set -uo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# Cheap exit if the repo hasn't adopted levers.
+[ -f .levers.yml ] || exit 0
+
+# Only run when a `.levers.yml` is staged — declarations changed, so
+# re-check schema + drift. Other commits don't move the declared side
+# of the diff, so the result hasn't changed since the last run. Matches
+# the root file plus any monorepo package files (`apps/x/.levers.yml`).
+if ! git diff --cached --name-only --diff-filter=ACMR \
+        | grep -qE '(^|/)\.levers\.yml$'; then
+    exit 0
+fi
+
+if ! command -v levers >/dev/null 2>&1; then
+    echo "pre-commit: levers not installed — skipping levers checks"
+    echo "(install: https://github.com/kylpo/levers)"
+    exit 0
+fi
+
+# Validate first — blocking. If the schema is broken, audit's output
+# isn't trustworthy anyway. Walks the tree like `audit` does, so this
+# covers single-repo and monorepo layouts with no extra config.
+levers validate || exit 1
+
+# Advisory — never block. Output goes to stderr/stdout for the engineer.
+levers audit || true
+exit 0
