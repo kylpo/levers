@@ -10,9 +10,155 @@
 
 from __future__ import annotations
 
+import sys
+from enum import Enum
+from pathlib import Path
+from typing import Optional
+
 import typer
+from ruamel.yaml import YAML
 
 __version__ = "0.1.0"
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+
+# `__file__` is the symlink path when installed via install.sh; resolve() follows
+# it to the real repo dir so we can find schema.yml + templates/ alongside.
+REPO_ROOT = Path(__file__).resolve().parent
+SCHEMA_PATH = REPO_ROOT / "schema.yml"
+TEMPLATES_DIR = REPO_ROOT / "templates"
+
+DEFAULT_FILENAME = ".levers.yml"
+
+# ---------------------------------------------------------------------------
+# YAML loader (shared)
+# ---------------------------------------------------------------------------
+
+_yaml = YAML(typ="rt")
+_yaml.preserve_quotes = True
+
+
+def load_yaml(path: Path) -> dict:
+    """Load a YAML file. Returns {} for empty files."""
+    with path.open() as f:
+        data = _yaml.load(f)
+    return data or {}
+
+
+def dump_yaml(data: dict, path: Path) -> None:
+    """Write a YAML file via ruamel.yaml (preserves comments on roundtrip)."""
+    with path.open("w") as f:
+        _yaml.dump(data, f)
+
+
+# ---------------------------------------------------------------------------
+# Schema
+# ---------------------------------------------------------------------------
+
+
+class Role(str, Enum):
+    single = "single"
+    root = "root"
+    package = "package"
+
+
+class Schema:
+    """Wrapper around schema.yml exposing lookups used by every command."""
+
+    def __init__(self, path: Path = SCHEMA_PATH) -> None:
+        raw = load_yaml(path)
+        self.categories: dict = raw["categories"]
+        self.levers: dict = raw["levers"]
+
+    def keys(self) -> list[str]:
+        return list(self.levers.keys())
+
+    def values_for(self, key: str) -> list[str]:
+        return list(self.levers[key]["values"])
+
+    def scope(self, key: str) -> str:
+        return self.levers[key]["scope"]
+
+    def category(self, key: str) -> str:
+        return self.levers[key]["category"]
+
+    def strictness(self, key: str) -> Optional[list[str]]:
+        return self.levers[key].get("strictness")
+
+    def required_for(self, role: Role) -> set[str]:
+        """Keys a .levers.yml of this role must declare."""
+        if role is Role.single:
+            return {k for k, v in self.levers.items() if v["scope"] in ("repo", "package")}
+        if role is Role.root:
+            return {k for k, v in self.levers.items() if v["scope"] == "repo"}
+        return {k for k, v in self.levers.items() if v["scope"] == "package"}
+
+    def forbidden_for(self, role: Role) -> set[str]:
+        """Keys a .levers.yml of this role must NOT declare."""
+        if role is Role.single:
+            return set()
+        if role is Role.root:
+            return {k for k, v in self.levers.items() if v["scope"] == "package"}
+        return {k for k, v in self.levers.items() if v["scope"] == "repo"}
+
+    def category_label(self, cat_id: str) -> str:
+        return self.categories[cat_id]["label"]
+
+    def keys_by_category(self) -> dict[str, list[str]]:
+        """Return {category_id: [key, ...]} preserving schema order."""
+        out: dict[str, list[str]] = {cat: [] for cat in self.categories}
+        for key, cfg in self.levers.items():
+            out[cfg["category"]].append(key)
+        return out
+
+
+def _load_schema() -> Schema:
+    if not SCHEMA_PATH.exists():
+        raise typer.Exit(_die(f"schema.yml not found at {SCHEMA_PATH}"))
+    return Schema()
+
+
+# ---------------------------------------------------------------------------
+# .levers.yml file discovery
+# ---------------------------------------------------------------------------
+
+
+def resolve_levers_path(at: Optional[Path]) -> Path:
+    """Resolve --at to a concrete .levers.yml file path.
+
+    Rules:
+    - If `at` is a file ending in .yml/.yaml, use it directly.
+    - If `at` is a directory, look for `<at>/.levers.yml`.
+    - If `at` is None, default to `./.levers.yml`.
+    """
+    target = at if at is not None else Path.cwd()
+    if target.is_file():
+        return target
+    if target.is_dir():
+        return target / DEFAULT_FILENAME
+    # Non-existent path — treat as a file path the user means
+    return target
+
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+
+
+def _die(msg: str, code: int = 2) -> int:
+    typer.echo(f"error: {msg}", err=True)
+    return code
+
+
+def _warn(msg: str) -> None:
+    typer.echo(f"warning: {msg}", err=True)
+
+
+# ---------------------------------------------------------------------------
+# Typer app
+# ---------------------------------------------------------------------------
 
 app = typer.Typer(
     name="levers",
@@ -39,6 +185,185 @@ def main(
     ),
 ) -> None:
     """Manage .levers.yml — per-project policy configuration."""
+
+
+# ---------------------------------------------------------------------------
+# validate
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def validate(
+    path: Optional[Path] = typer.Argument(
+        None,
+        help="Path to a .levers.yml file (or a directory containing one). Defaults to ./.levers.yml.",
+    ),
+    role: Role = typer.Option(
+        Role.single,
+        "--role",
+        help="Validation role. `single` for a single-repo project; `root`/`package` for monorepos.",
+    ),
+) -> None:
+    """Validate a .levers.yml file against the schema."""
+    schema = _load_schema()
+    target = resolve_levers_path(path)
+
+    if not target.exists():
+        raise typer.Exit(_die(f"{target} not found"))
+
+    try:
+        data = load_yaml(target)
+    except Exception as exc:
+        raise typer.Exit(_die(f"failed to parse {target}: {exc}"))
+
+    if not isinstance(data, dict):
+        raise typer.Exit(_die(f"{target} must be a YAML mapping at the top level"))
+
+    errors: list[str] = []
+
+    # Unknown keys
+    unknown = set(data) - set(schema.levers)
+    for key in sorted(unknown):
+        errors.append(f"unknown key: {key}")
+
+    # Forbidden keys for this role
+    forbidden = schema.forbidden_for(role)
+    for key in sorted(set(data) & forbidden):
+        scope = schema.scope(key)
+        errors.append(
+            f"{key}: {scope}-scoped, not allowed in role={role.value}"
+        )
+
+    # Missing required keys
+    required = schema.required_for(role)
+    for key in sorted(required - set(data)):
+        errors.append(f"missing required key: {key} (scope={schema.scope(key)})")
+
+    # Enum violations
+    for key, value in data.items():
+        if key not in schema.levers:
+            continue
+        allowed = schema.values_for(key)
+        if value not in allowed:
+            errors.append(
+                f"{key}: invalid value {value!r} — allowed: {', '.join(allowed)}"
+            )
+
+    if errors:
+        typer.echo(f"✗ {target} ({len(errors)} error{'s' if len(errors) != 1 else ''})")
+        for e in errors:
+            typer.echo(f"  - {e}")
+        raise typer.Exit(1)
+
+    typer.echo(f"✓ {target} valid (role={role.value}, {len(data)} keys)")
+
+
+# ---------------------------------------------------------------------------
+# list-enums
+# ---------------------------------------------------------------------------
+
+
+class EnumFormat(str, Enum):
+    text = "text"
+    yaml = "yaml"
+
+
+@app.command("list-enums")
+def list_enums(
+    key: Optional[str] = typer.Option(
+        None,
+        "--key",
+        help="Show enum values for a single lever key.",
+    ),
+    role: Optional[Role] = typer.Option(
+        None,
+        "--role",
+        help="Filter to keys relevant to this role.",
+    ),
+    fmt: EnumFormat = typer.Option(
+        EnumFormat.text,
+        "--format",
+        help="Output format.",
+    ),
+) -> None:
+    """List allowed enum values for lever keys, grouped by category."""
+    schema = _load_schema()
+
+    if key is not None:
+        if key not in schema.levers:
+            raise typer.Exit(_die(f"unknown key: {key}"))
+        values = schema.values_for(key)
+        scope = schema.scope(key)
+        if fmt is EnumFormat.yaml:
+            typer.echo(f"{key}: [{', '.join(values)}]")
+        else:
+            typer.echo(f"{key} ({scope}): {' | '.join(values)}")
+        return
+
+    # Filter keys by role
+    keys_filter: Optional[set[str]] = None
+    if role is not None:
+        allowed_scopes = {
+            Role.single: {"repo", "package", "either"},
+            Role.root: {"repo", "either"},
+            Role.package: {"package", "either"},
+        }[role]
+        keys_filter = {k for k, v in schema.levers.items() if v["scope"] in allowed_scopes}
+
+    grouped = schema.keys_by_category()
+
+    if fmt is EnumFormat.yaml:
+        # Flat YAML-list output: key: [v1, v2, ...]
+        for cat_id, keys in grouped.items():
+            keys = [k for k in keys if keys_filter is None or k in keys_filter]
+            if not keys:
+                continue
+            typer.echo(f"# {schema.category_label(cat_id)}")
+            for k in keys:
+                typer.echo(f"{k}: [{', '.join(schema.values_for(k))}]")
+        return
+
+    # Text output: grouped, scope-annotated
+    for cat_id, keys in grouped.items():
+        keys = [k for k in keys if keys_filter is None or k in keys_filter]
+        if not keys:
+            continue
+        typer.echo(f"# {schema.category_label(cat_id)}")
+        for k in keys:
+            scope = schema.scope(k)
+            values = " | ".join(schema.values_for(k))
+            typer.echo(f"  {k} ({scope}): {values}")
+        typer.echo("")
+
+
+# ---------------------------------------------------------------------------
+# get
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def get(
+    key: str = typer.Argument(..., help="Lever key to read."),
+    at: Optional[Path] = typer.Option(
+        None,
+        "--at",
+        help="Path to .levers.yml (or directory containing one). Defaults to ./.levers.yml.",
+    ),
+) -> None:
+    """Print the value of a single lever key from a .levers.yml file."""
+    schema = _load_schema()
+    if key not in schema.levers:
+        raise typer.Exit(_die(f"unknown key: {key}"))
+
+    target = resolve_levers_path(at)
+    if not target.exists():
+        raise typer.Exit(_die(f"{target} not found"))
+
+    data = load_yaml(target)
+    if key not in data:
+        raise typer.Exit(_die(f"{key} not declared in {target}", code=1))
+
+    typer.echo(data[key])
 
 
 if __name__ == "__main__":
