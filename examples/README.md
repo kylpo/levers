@@ -14,6 +14,7 @@ Two different checks, two different blocking policies:
 | [`hooks/pre-commit`](./hooks/pre-commit) | blocks | advisory (warns only) |
 | [`hooks/pre-push`](./hooks/pre-push) | blocks | blocks (`--strict`) |
 | [`github-actions/levers-audit.yml`](./github-actions/levers-audit.yml) | blocks | blocks (`--strict`) |
+| [`claude-code/settings.json`](./claude-code/settings.json) | n/a — agent read guard | n/a — agent read guard |
 
 The split on audit: surface drift early at commit time so you see it while context is hot, but don't interrupt the local edit-commit loop. Block at push and on CI, where the cost of fixing is paid once instead of every commit. Validate is uniformly blocking — there's no reason to land a broken schema.
 
@@ -53,6 +54,15 @@ cp examples/github-actions/levers-audit.yml .github/workflows/
 ```
 
 The workflow needs no secrets — it clones the public [`kylpo/levers`](https://github.com/kylpo/levers) repo and runs the script via `uv`. To make drift a merge blocker, add the `levers-audit` check to your branch protection rules.
+
+### Claude Code hooks
+
+Two `PreToolUse` hooks that intercept agent access to `.levers.yml` and redirect to `levers resolve` / `levers get`. Without them, a coding agent reading a package-level `.levers.yml` directly sees only the local overrides — not the merged effective view after inheritance from the root file. The hooks deny:
+
+- **Bash** commands that reference `.levers.yml`, except when the command itself is one of `levers resolve | get | validate | audit | set | init | add-package | detect-packages | list-enums`.
+- **Read** of any path matching `.levers.yml`.
+
+Merge [`claude-code/settings.json`](./claude-code/settings.json) into your project's `.claude/settings.json` (or `~/.claude/settings.json` for user-wide). If you already have `hooks.PreToolUse` entries, append these two matchers rather than overwriting the array.
 
 ## Monorepos
 
