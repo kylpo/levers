@@ -757,6 +757,57 @@ def add_package(
 
 
 # ---------------------------------------------------------------------------
+# detect-packages
+# ---------------------------------------------------------------------------
+
+
+@app.command("detect-packages")
+def detect_packages(
+    paths: list[Path] = typer.Argument(
+        ...,
+        help="One or more paths inside the repo. Resolves each to the nearest-ancestor package directory.",
+    ),
+    repo_root: Optional[Path] = typer.Option(
+        None,
+        "--repo-root",
+        help="Override the repo root (defaults to walking up to .git).",
+    ),
+) -> None:
+    """Enumerate distinct packages a set of paths spans.
+
+    Output: one package root per line, relative to the repo root.
+    Empty output means every path resolves to the repo root (single-package or
+    no package overrides). Multiple lines mean the paths span multiple
+    packages — caller decides whether to split per-package or merge via
+    `levers resolve --merge-strictest`.
+    """
+    if repo_root is not None:
+        root = repo_root.resolve()
+    else:
+        found = _find_repo_root(_abs_or_absolute(paths[0]))
+        if found is None:
+            raise typer.Exit(
+                _die(
+                    f"could not find repo root for {paths[0]}. Pass --repo-root to override.",
+                    code=1,
+                )
+            )
+        root = found
+
+    seen: list[str] = []
+    for p in paths:
+        pkg = _find_package_levers(_abs_or_absolute(p), root)
+        if pkg is None:
+            continue
+        rel = str(pkg.parent.resolve().relative_to(root))
+        if rel not in seen:
+            seen.append(rel)
+
+    for rel in sorted(seen):
+        typer.echo(rel)
+
+
+# ---------------------------------------------------------------------------
 # audit — drift detection
 # ---------------------------------------------------------------------------
 
