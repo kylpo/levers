@@ -366,5 +366,164 @@ def get(
     typer.echo(data[key])
 
 
+# ---------------------------------------------------------------------------
+# set
+# ---------------------------------------------------------------------------
+
+
+@app.command("set")
+def set_(
+    key: str = typer.Argument(..., help="Lever key to write."),
+    value: str = typer.Argument(..., help="New value (must be in the key's enum)."),
+    at: Optional[Path] = typer.Option(
+        None,
+        "--at",
+        help="Path to .levers.yml (or directory containing one). Defaults to ./.levers.yml.",
+    ),
+) -> None:
+    """Set a single lever value, preserving existing comments and layout."""
+    schema = _load_schema()
+    if key not in schema.levers:
+        raise typer.Exit(_die(f"unknown key: {key}"))
+
+    allowed = schema.values_for(key)
+    if value not in allowed:
+        raise typer.Exit(
+            _die(f"invalid value {value!r} for {key} — allowed: {', '.join(allowed)}")
+        )
+
+    target = resolve_levers_path(at)
+    if not target.exists():
+        raise typer.Exit(
+            _die(f"{target} not found — run `levers init` first")
+        )
+
+    data = load_yaml(target)
+    previous = data.get(key)
+    data[key] = value
+    dump_yaml(data, target)
+
+    if previous is None:
+        typer.echo(f"ok: {target} {key} = {value} (added)")
+    elif previous == value:
+        typer.echo(f"ok: {target} {key} = {value} (unchanged)")
+    else:
+        typer.echo(f"ok: {target} {key}: {previous} → {value}")
+
+
+# ---------------------------------------------------------------------------
+# init
+# ---------------------------------------------------------------------------
+
+
+def _template_path(role: Role) -> Path:
+    return TEMPLATES_DIR / f"{role.value}.yml"
+
+
+def _write_template(role: Role, target: Path, force: bool) -> None:
+    """Copy a template to `target`, refusing to overwrite without --force."""
+    src = _template_path(role)
+    if not src.exists():
+        raise typer.Exit(_die(f"template not found: {src}"))
+
+    if target.exists() and not force:
+        raise typer.Exit(
+            _die(f"{target} already exists — pass --force to overwrite", code=1)
+        )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(src.read_bytes())
+
+
+@app.command()
+def init(
+    role: Role = typer.Option(
+        Role.single,
+        "--role",
+        help="Project shape. `single` for a single-repo project; `root` for a monorepo's root file.",
+    ),
+    at: Optional[Path] = typer.Option(
+        None,
+        "--at",
+        help="Directory to write .levers.yml into. Defaults to cwd.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing .levers.yml.",
+    ),
+) -> None:
+    """Create a new .levers.yml from a template."""
+    if role is Role.package:
+        raise typer.Exit(
+            _die(
+                "use `levers add-package <path>` to scaffold a package file in a monorepo",
+                code=2,
+            )
+        )
+
+    at_dir = at if at is not None else Path.cwd()
+    if at_dir.exists() and not at_dir.is_dir():
+        raise typer.Exit(_die(f"{at_dir} is not a directory"))
+
+    target = at_dir / DEFAULT_FILENAME
+    _write_template(role, target, force)
+    typer.echo(f"ok: wrote {target} (role={role.value})")
+
+
+# ---------------------------------------------------------------------------
+# add-package
+# ---------------------------------------------------------------------------
+
+
+def _find_repo_root(start: Path) -> Optional[Path]:
+    """Walk up from `start` looking for a .git dir/file. Returns None if not found."""
+    for d in [start, *start.parents]:
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+@app.command("add-package")
+def add_package(
+    path: Path = typer.Argument(..., help="Package directory to scaffold a .levers.yml in."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing .levers.yml in the package directory.",
+    ),
+) -> None:
+    """Scaffold a package-scoped .levers.yml inside a monorepo."""
+    pkg_dir = path
+    if not pkg_dir.exists():
+        raise typer.Exit(_die(f"{pkg_dir} does not exist"))
+    if not pkg_dir.is_dir():
+        raise typer.Exit(_die(f"{pkg_dir} is not a directory"))
+
+    repo_root = _find_repo_root(pkg_dir.resolve())
+    if repo_root is None:
+        raise typer.Exit(
+            _die(f"{pkg_dir} is not inside a git repository — cannot detect monorepo root")
+        )
+
+    root_levers = repo_root / DEFAULT_FILENAME
+    if not root_levers.exists():
+        raise typer.Exit(
+            _die(
+                f"no root .levers.yml at {root_levers} — run "
+                f"`levers init --role root --at {repo_root}` first"
+            )
+        )
+
+    if pkg_dir.resolve() == repo_root:
+        raise typer.Exit(
+            _die("refusing to add-package at the repo root — that's the root file", code=1)
+        )
+
+    target = pkg_dir / DEFAULT_FILENAME
+    _write_template(Role.package, target, force)
+    typer.echo(f"ok: wrote {target}")
+
+
 if __name__ == "__main__":
     app()
