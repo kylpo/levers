@@ -1,0 +1,45 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "typer>=0.12",
+#   "ruamel.yaml>=0.18",
+# ]
+# ///
+"""levers — manage .levers.yml configuration files."""
+
+from __future__ import annotations
+
+import typer
+
+__version__ = "0.1.0"
+
+app = typer.Typer(
+    name="levers",
+    help="Manage .levers.yml — per-project policy configuration.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"levers {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Print version and exit.",
+    ),
+) -> None:
+    """Manage .levers.yml — per-project policy configuration."""
+
+
+if __name__ == "__main__":
+    app()
