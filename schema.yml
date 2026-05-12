@@ -84,8 +84,8 @@ levers:
   code_review:
     scope: either
     category: quality
-    values: [none, subagent, subagent_advisory]
-    strictness: [subagent_advisory, subagent, none]
+    values: [none, inline, subagent, subagent_advisory]
+    strictness: [subagent_advisory, subagent, inline, none]
 
   # --- Release & delivery ---
   release_model:

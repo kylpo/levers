@@ -92,7 +92,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `test_strategy` | `either` | `coverage_delta` \| `test_after` \| `manual_only` |
 | `manual_qa_capture` | `package` | `captured` \| `not_captured` |
 | `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
-| `code_review` | `either` | `none` \| `subagent` \| `subagent_advisory` |
+| `code_review` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
 
 ### Release & delivery
 
@@ -178,7 +178,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `release_model` | `release_branch` → `batched_timeline` → `batched_feature_scoped` → `continuous` |
 | `planning_horizon` | `big_bang` → `phased` → `just_in_time` |
 | `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |
-| `code_review` | `subagent_advisory` → `subagent` → `none` |
+| `code_review` | `subagent_advisory` → `subagent` → `inline` → `none` |
 
 Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
 
