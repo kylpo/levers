@@ -30,6 +30,7 @@ versioning: semver
 # --- Automation ---
 agent_auto_merge: low_risk_only
 bug_intake: manual
+ticket_claim: comment
 
 # --- Documentation ---
 changelog_style: curated

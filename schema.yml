@@ -121,6 +121,11 @@ levers:
     category: automation
     values: [manual, funneled]
 
+  ticket_claim:
+    scope: either
+    category: automation
+    values: [comment, empty_pr]
+
   # --- Documentation ---
   changelog_style:
     scope: package

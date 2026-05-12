@@ -28,6 +28,7 @@ branch_strategy: trunk_based
 # --- Automation ---
 agent_auto_merge: low_risk_only   # either-scoped default
 bug_intake: manual                # repo-scoped
+ticket_claim: comment             # either-scoped default
 
 # --- Documentation (either-scoped default) ---
 doc_sync: inline
