@@ -3,7 +3,7 @@
 # Drives:
 #   - `levers validate`        — enum + scope checks per role (single|root|package)
 #   - `levers list-enums`      — grouped, scope-annotated output
-#   - `levers resolve --merge-strictest` — strictness ordering across packages
+#   - `levers merge-strictest`            — strictness ordering across packages
 #   - `levers init` / `add-package`      — required-key enforcement per role
 #
 # Scope:
@@ -13,10 +13,10 @@
 #               overridden per package
 #
 # Strictness (optional): values listed strictest → loosest. Used by
-# `--merge-strictest` to pick a single value when a change set spans
+# `levers merge-strictest` to pick a single value when a change set spans
 # multiple packages. Keys without a meaningful strictness ordering omit
-# the field; --merge-strictest fails if asked to merge them across
-# packages.
+# the field; `merge-strictest` fails if asked to merge them across
+# packages with diverging values.
 
 categories:
   lifecycle:

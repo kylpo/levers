@@ -736,33 +736,192 @@ def list_enums(
 
 
 # ---------------------------------------------------------------------------
-# get
+# Effective view — shared helpers used by `get` and `merge-strictest`
+# ---------------------------------------------------------------------------
+
+
+def _find_repo_root(start: Path) -> Optional[Path]:
+    """Walk up from `start` looking for a .git dir/file. Returns None if not found."""
+    for d in [start, *start.parents]:
+        if (d / ".git").exists():
+            return d
+    return None
+
+
+class ResolveFormat(str, Enum):
+    yaml = "yaml"
+    json = "json"
+
+
+class ResolveError(Exception):
+    """Raised by resolution helpers when a path can't be resolved."""
+
+
+def _find_package_levers(start: Path, repo_root: Path) -> Optional[Path]:
+    """Walk up from `start` (exclusive of repo_root) looking for .levers.yml."""
+    d = start if start.is_dir() else start.parent
+    d = d.resolve()
+    root = repo_root.resolve()
+    while d != root and d != d.parent:
+        candidate = d / DEFAULT_FILENAME
+        if candidate.is_file():
+            return candidate
+        d = d.parent
+    return None
+
+
+def _abs_or_absolute(p: Path) -> Path:
+    """Best-effort absolute path that works for non-existent inputs."""
+    return p.resolve() if p.exists() else p.absolute()
+
+
+def _resolve_one(target: Path, repo_root_override: Optional[Path]) -> dict:
+    """Compute the effective .levers.yml view for a single path.
+
+    Returns: {"data": merged_dict, "root_file": Path, "pkg_file": Path | None}
+    """
+    if repo_root_override is not None:
+        repo_root = repo_root_override.resolve()
+    else:
+        found = _find_repo_root(_abs_or_absolute(target))
+        if found is None:
+            raise ResolveError(
+                f"could not find repo root for {target} (no .git found). "
+                f"Pass --repo-root to override."
+            )
+        repo_root = found
+
+    root_file = repo_root / DEFAULT_FILENAME
+    if not root_file.is_file():
+        raise ResolveError(
+            f"no .levers.yml at repo root ({repo_root}) — run `levers init` to author one"
+        )
+
+    abs_target = _abs_or_absolute(target)
+    try:
+        abs_target.relative_to(repo_root)
+    except ValueError:
+        raise ResolveError(f"{target} is outside repo root {repo_root}")
+
+    root_data = load_yaml(root_file)
+    pkg_file = _find_package_levers(abs_target, repo_root)
+    if pkg_file is not None and pkg_file != root_file:
+        pkg_data = load_yaml(pkg_file)
+        merged: dict = {**root_data, **pkg_data}
+    else:
+        pkg_file = None
+        merged = dict(root_data)
+
+    return {"data": merged, "root_file": root_file, "pkg_file": pkg_file}
+
+
+def _narrow(data: dict, keys: list[str]) -> dict:
+    """Filter `data` to `keys`, preserving the order in `keys`."""
+    return {k: data[k] for k in keys if k in data}
+
+
+def _emit(data: dict, fmt: ResolveFormat, comment_lines: list[str]) -> None:
+    """Emit a resolved view as YAML (with comment header) or JSON."""
+    if fmt is ResolveFormat.json:
+        typer.echo(json.dumps(data, indent=2, sort_keys=True))
+        return
+    for line in comment_lines:
+        typer.echo(line)
+    buf = io.StringIO()
+    plain = YAML(typ="safe")
+    plain.default_flow_style = False
+    plain.dump(data, buf)
+    typer.echo(buf.getvalue().rstrip("\n"))
+
+
+def _parse_csv_keys(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    return [k.strip() for k in value.split(",") if k.strip()]
+
+
+# ---------------------------------------------------------------------------
+# get — effective view (inheritance-aware)
 # ---------------------------------------------------------------------------
 
 
 @app.command()
 def get(
-    key: str = typer.Argument(..., help="Lever key to read."),
+    key: Optional[str] = typer.Argument(
+        None,
+        help="Lever key to read. Omit to print all effective keys.",
+    ),
     at: Optional[Path] = typer.Option(
         None,
         "--at",
-        help="Path to .levers.yml (or directory containing one). Defaults to ./.levers.yml.",
+        help="Path inside the repo (file or directory). Defaults to cwd.",
+    ),
+    keys: Optional[str] = typer.Option(
+        None,
+        "--keys",
+        help="Comma-separated list of keys to narrow the output to.",
+    ),
+    fmt: ResolveFormat = typer.Option(
+        ResolveFormat.yaml,
+        "--format",
+        help="Output format (used when emitting multiple keys).",
+    ),
+    repo_root: Optional[Path] = typer.Option(
+        None,
+        "--repo-root",
+        help="Override the repo root (defaults to walking up to .git).",
     ),
 ) -> None:
-    """Print the value of a single lever key from a .levers.yml file."""
+    """Read effective lever values at a path (root + nearest-ancestor package, merged).
+
+    With a positional <key>, prints just the raw value (no fences). Without,
+    prints the full merged view (YAML with provenance header by default, or
+    JSON via --format json). Use --keys to narrow to a list.
+    """
     schema = _load_schema()
-    if key not in schema.levers:
-        raise typer.Exit(_die(f"unknown key: {key}"))
 
-    target = resolve_levers_path(at)
-    if not target.exists():
-        raise typer.Exit(_die(f"{target} not found"))
+    if key is not None and keys is not None:
+        raise typer.Exit(_die("--keys cannot be combined with a positional key"))
+    if key is not None and key not in schema.levers:
+        raise typer.Exit(_die(f"unknown lever key: {key}"))
 
-    data = load_yaml(target)
-    if key not in data:
-        raise typer.Exit(_die(f"{key} not declared in {target}", code=1))
+    key_filter = _parse_csv_keys(keys)
+    for k in key_filter:
+        if k not in schema.levers:
+            raise typer.Exit(_die(f"unknown lever key: {k}"))
 
-    typer.echo(data[key])
+    target = at if at is not None else Path.cwd()
+    try:
+        r = _resolve_one(target, repo_root)
+    except ResolveError as exc:
+        raise typer.Exit(_die(str(exc), code=1))
+
+    data = r["data"]
+
+    if key is not None:
+        if key not in data:
+            raise typer.Exit(
+                _die(f"{key} is not declared in the effective view for {target}", code=1)
+            )
+        typer.echo(data[key])
+        return
+
+    out = _narrow(data, key_filter) if key_filter else data
+    pkg_line = (
+        f"# Package: {r['pkg_file']}" if r["pkg_file"] is not None
+        else "# Package: (none — single-repo or no nearest-ancestor package file)"
+    )
+    keys_label = ",".join(key_filter) if key_filter else "(all)"
+    header = [
+        "---",
+        f"# Synthesized by `levers get` for {target}",
+        f"# Root: {r['root_file']}",
+        pkg_line,
+        f"# Keys: {keys_label}",
+    ]
+    _emit(out, fmt, header)
+    if fmt is ResolveFormat.yaml:
+        typer.echo("---")
 
 
 # ---------------------------------------------------------------------------
@@ -956,125 +1115,15 @@ def init(
 
 
 # ---------------------------------------------------------------------------
-# add-package
+# merge-strictest — cross-package strictness fold (rare, for automation)
 # ---------------------------------------------------------------------------
 
 
-def _find_repo_root(start: Path) -> Optional[Path]:
-    """Walk up from `start` looking for a .git dir/file. Returns None if not found."""
-    for d in [start, *start.parents]:
-        if (d / ".git").exists():
-            return d
-    return None
-
-
-# ---------------------------------------------------------------------------
-# resolve
-# ---------------------------------------------------------------------------
-
-
-class ResolveFormat(str, Enum):
-    yaml = "yaml"
-    json = "json"
-
-
-class ResolveError(Exception):
-    """Raised by resolution helpers when a path can't be resolved."""
-
-
-def _find_package_levers(start: Path, repo_root: Path) -> Optional[Path]:
-    """Walk up from `start` (exclusive of repo_root) looking for .levers.yml."""
-    d = start if start.is_dir() else start.parent
-    d = d.resolve()
-    root = repo_root.resolve()
-    while d != root and d != d.parent:
-        candidate = d / DEFAULT_FILENAME
-        if candidate.is_file():
-            return candidate
-        d = d.parent
-    return None
-
-
-def _abs_or_absolute(p: Path) -> Path:
-    """Best-effort absolute path that works for non-existent inputs."""
-    return p.resolve() if p.exists() else p.absolute()
-
-
-def _resolve_one(target: Path, repo_root_override: Optional[Path]) -> dict:
-    """Compute the effective .levers.yml view for a single path.
-
-    Returns: {"data": merged_dict, "root_file": Path, "pkg_file": Path | None}
-    """
-    if repo_root_override is not None:
-        repo_root = repo_root_override.resolve()
-    else:
-        found = _find_repo_root(_abs_or_absolute(target))
-        if found is None:
-            raise ResolveError(
-                f"could not find repo root for {target} (no .git found). "
-                f"Pass --repo-root to override."
-            )
-        repo_root = found
-
-    root_file = repo_root / DEFAULT_FILENAME
-    if not root_file.is_file():
-        raise ResolveError(
-            f"no .levers.yml at repo root ({repo_root}) — run `levers init` to author one"
-        )
-
-    abs_target = _abs_or_absolute(target)
-    try:
-        abs_target.relative_to(repo_root)
-    except ValueError:
-        raise ResolveError(f"{target} is outside repo root {repo_root}")
-
-    root_data = load_yaml(root_file)
-    pkg_file = _find_package_levers(abs_target, repo_root)
-    if pkg_file is not None and pkg_file != root_file:
-        pkg_data = load_yaml(pkg_file)
-        merged: dict = {**root_data, **pkg_data}
-    else:
-        pkg_file = None
-        merged = dict(root_data)
-
-    return {"data": merged, "root_file": root_file, "pkg_file": pkg_file}
-
-
-def _narrow(data: dict, keys: list[str]) -> dict:
-    """Filter `data` to `keys`, preserving the order in `keys`."""
-    return {k: data[k] for k in keys if k in data}
-
-
-def _emit(data: dict, fmt: ResolveFormat, comment_lines: list[str]) -> None:
-    """Emit a resolved view as YAML (with comment header) or JSON."""
-    if fmt is ResolveFormat.json:
-        typer.echo(json.dumps(data, indent=2, sort_keys=True))
-        return
-    for line in comment_lines:
-        typer.echo(line)
-    buf = io.StringIO()
-    plain = YAML(typ="safe")
-    plain.default_flow_style = False
-    plain.dump(data, buf)
-    typer.echo(buf.getvalue().rstrip("\n"))
-
-
-def _parse_csv_keys(value: Optional[str]) -> list[str]:
-    if not value:
-        return []
-    return [k.strip() for k in value.split(",") if k.strip()]
-
-
-@app.command()
-def resolve(
+@app.command("merge-strictest")
+def merge_strictest(
     paths: list[Path] = typer.Argument(
         ...,
-        help="One or more paths inside the repo. With --merge-strictest, multiple paths are folded; otherwise pass exactly one.",
-    ),
-    get: Optional[str] = typer.Option(
-        None,
-        "--get",
-        help="Print just the value for a single key (no YAML fences).",
+        help="Paths spanning multiple packages. Each lever folds to its strictest value across the paths.",
     ),
     keys: Optional[str] = typer.Option(
         None,
@@ -1091,107 +1140,69 @@ def resolve(
         "--repo-root",
         help="Override the repo root (defaults to walking up to .git).",
     ),
-    merge_strictest: bool = typer.Option(
-        False,
-        "--merge-strictest",
-        help="Resolve each path independently, then fold across using strictness order.",
-    ),
 ) -> None:
-    """Compute the effective .levers.yml view at one or more paths."""
+    """Fold the effective view across multiple paths using strictness ordering.
+
+    For unattended automation that must produce a single decision over a change
+    set spanning multiple packages (e.g., one auto-merge verdict for a PR
+    touching apps/mobile and packages/shared). Prefer per-package splitting
+    when possible — this is the cross-cutting fallback. Errors on levers that
+    have no strictness order if their values diverge across paths.
+    """
     schema = _load_schema()
 
     key_filter = _parse_csv_keys(keys)
     for k in key_filter:
         if k not in schema.levers:
             raise typer.Exit(_die(f"unknown lever key: {k}"))
-    if get is not None and get not in schema.levers:
-        raise typer.Exit(_die(f"unknown lever key: {get}"))
-    if get is not None and merge_strictest:
-        raise typer.Exit(_die("--get cannot be combined with --merge-strictest"))
-    if get is not None and key_filter:
-        raise typer.Exit(_die("--get cannot be combined with --keys"))
 
-    # ---- --merge-strictest mode ----
-    if merge_strictest:
-        if len(paths) < 1:
-            raise typer.Exit(_die("--merge-strictest requires at least one path"))
-        resolved: list[dict] = []
-        for p in paths:
-            try:
-                resolved.append(_resolve_one(p, repo_root))
-            except ResolveError as exc:
-                raise typer.Exit(_die(str(exc), code=1))
+    if len(paths) < 1:
+        raise typer.Exit(_die("merge-strictest requires at least one path"))
 
-        target_keys = key_filter if key_filter else schema.keys()
-        merged: dict = {}
-        for k in target_keys:
-            vals = [r["data"].get(k) for r in resolved if k in r["data"]]
-            if not vals:
-                continue
-            if all(v == vals[0] for v in vals):
-                merged[k] = vals[0]
-                continue
-            order = schema.strictness(k)
-            if order is None:
-                raise typer.Exit(
-                    _die(
-                        f"lever {k!r} is not strictness-mergeable across packages — split the change or pick per-package",
-                        code=1,
-                    )
-                )
-            winner = next((v for v in order if v in vals), None)
-            if winner is None:
-                raise typer.Exit(_die(f"unexpected: no winner for {k} among {vals}"))
-            merged[k] = winner
+    resolved: list[dict] = []
+    for p in paths:
+        try:
+            resolved.append(_resolve_one(p, repo_root))
+        except ResolveError as exc:
+            raise typer.Exit(_die(str(exc), code=1))
 
-        keys_label = ",".join(key_filter) if key_filter else "(all)"
-        header = [
-            "---",
-            f"# Synthesized by `levers resolve --merge-strictest` across {len(paths)} path(s)",
-            f"# Root: {resolved[0]['root_file']}",
-            f"# Keys: {keys_label}",
-        ]
-        _emit(merged, fmt, header)
-        if fmt is ResolveFormat.yaml:
-            typer.echo("---")
-        return
-
-    # ---- Single-path mode ----
-    if len(paths) != 1:
-        raise typer.Exit(
-            _die(f"exactly one path required (got {len(paths)}) unless using --merge-strictest")
-        )
-    try:
-        r = _resolve_one(paths[0], repo_root)
-    except ResolveError as exc:
-        raise typer.Exit(_die(str(exc), code=1))
-
-    data = r["data"]
-
-    if get is not None:
-        if get not in data:
+    target_keys = key_filter if key_filter else schema.keys()
+    merged: dict = {}
+    for k in target_keys:
+        vals = [r["data"].get(k) for r in resolved if k in r["data"]]
+        if not vals:
+            continue
+        if all(v == vals[0] for v in vals):
+            merged[k] = vals[0]
+            continue
+        order = schema.strictness(k)
+        if order is None:
             raise typer.Exit(
-                _die(f"{get} is not declared in the effective view for {paths[0]}", code=1)
+                _die(
+                    f"lever {k!r} is not strictness-mergeable across packages — split the change or pick per-package",
+                    code=1,
+                )
             )
-        typer.echo(data[get])
-        return
+        winner = next((v for v in order if v in vals), None)
+        if winner is None:
+            raise typer.Exit(_die(f"unexpected: no winner for {k} among {vals}"))
+        merged[k] = winner
 
-    out = _narrow(data, key_filter) if key_filter else data
-    pkg_line = (
-        f"# Package: {r['pkg_file']}" if r["pkg_file"] is not None
-        else "# Package: (none — single-repo or no nearest-ancestor package file)"
-    )
     keys_label = ",".join(key_filter) if key_filter else "(all)"
     header = [
         "---",
-        f"# Synthesized by `levers resolve` for {paths[0]}",
-        f"# Root: {r['root_file']}",
-        pkg_line,
+        f"# Synthesized by `levers merge-strictest` across {len(paths)} path(s)",
+        f"# Root: {resolved[0]['root_file']}",
         f"# Keys: {keys_label}",
     ]
-    _emit(out, fmt, header)
+    _emit(merged, fmt, header)
     if fmt is ResolveFormat.yaml:
         typer.echo("---")
+
+
+# ---------------------------------------------------------------------------
+# add-package
+# ---------------------------------------------------------------------------
 
 
 @app.command("add-package")
@@ -1258,7 +1269,7 @@ def detect_packages(
     Empty output means every path resolves to the repo root (single-package or
     no package overrides). Multiple lines mean the paths span multiple
     packages — caller decides whether to split per-package or merge via
-    `levers resolve --merge-strictest`.
+    `levers merge-strictest`.
     """
     if repo_root is not None:
         root = repo_root.resolve()

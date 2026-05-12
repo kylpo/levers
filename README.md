@@ -69,9 +69,9 @@ A monorepo has a root `.levers.yml` plus one `.levers.yml` per package. Repo-wid
 levers init --role root                       # root file (repo-wide policy)
 levers add-package apps/mobile                # per-package file (one per deliverable)
 
-# Effective view at any path (root + nearest-ancestor package, merged)
-levers resolve apps/mobile/src                # all keys, YAML with provenance header
-levers resolve apps/mobile --get ci_gate      # single raw value
+# Effective value(s) at any path (root + nearest-ancestor package, merged)
+levers get ci_gate --at apps/mobile/src       # single raw value
+levers get --at apps/mobile/src               # all keys, YAML with provenance header
 
 # Cross-package change set
 levers detect-packages apps/mobile/x.swift packages/shared/y.swift
@@ -79,7 +79,7 @@ levers detect-packages apps/mobile/x.swift packages/shared/y.swift
 # packages/shared
 
 # Cross-package merge for unattended automation (strictest value wins per lever)
-levers resolve --merge-strictest apps/mobile packages/shared --keys ci_gate,agent_auto_merge
+levers merge-strictest apps/mobile packages/shared --keys ci_gate,agent_auto_merge
 ```
 
 Full mechanics in [docs/spec.md](./docs/spec.md).
@@ -109,6 +109,29 @@ Schema tables with every enum value: [docs/spec.md § Schema](./docs/spec.md#sch
 ```
 
 The check list: [docs/drift.md](./docs/drift.md). Drop-in git hooks and a GitHub Actions workflow that wire `audit` into pre-commit / pre-push / CI: [examples/](./examples/).
+
+## FAQ
+
+<details>
+<summary>When is <code>levers merge-strictest</code> used?</summary>
+
+Rare, specialized — it's the cross-cutting fallback when a change set spans multiple packages **and** the consumer can't process per-package.
+
+Concrete shape:
+
+- A PR touches files in `apps/mobile` and `packages/shared`. The auto-merge gate has to make **one** decision for the whole PR — it can't merge mobile but block shared.
+- The gate calls `levers merge-strictest apps/mobile packages/shared --keys agent_auto_merge` and gets the strictest value across the two (`none` beats `low_risk_only` beats `all`).
+- Same shape for unattended CI gates, batch operations, anything that produces a single yes/no over a multi-package diff.
+
+The spec calls per-package splitting the preferred path — let each package decide for its own files. `merge-strictest` is the safety valve when splitting isn't possible.
+
+So it's:
+
+- Not a daily human command — humans run `levers get`.
+- Called by CI/hooks/agents on cross-package change sets.
+- Errors loudly on levers without a strictness order (forces the human to split or pick).
+
+</details>
 
 ## Documentation
 

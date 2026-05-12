@@ -20,8 +20,10 @@ def test_version(run) -> None:
 
 def test_help_lists_subcommands(run) -> None:
     r = run("--help").assert_ok()
-    for cmd in ["validate", "list-enums", "get", "set", "init", "add-package", "resolve", "audit", "detect-packages"]:
+    for cmd in ["validate", "list-enums", "get", "set", "init", "add-package", "merge-strictest", "audit", "detect-packages"]:
         assert cmd in r.stdout, f"--help missing subcommand: {cmd}"
+    # `resolve` was folded into `get` (with inheritance) + `merge-strictest`.
+    assert "resolve" not in r.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +102,75 @@ def test_get_existing_key(run, single_repo: Path) -> None:
 
 def test_get_unknown_key_errors(run, single_repo: Path) -> None:
     run("get", "no_such_key", cwd=single_repo).assert_fails(2)
+
+
+def test_get_inherits_root_value_at_package_path(run, monorepo: Path) -> None:
+    # ci_gate lives only at root in the monorepo fixture — reading at a
+    # package path should return the inherited value, not error.
+    r = run("get", "ci_gate", "--at", "apps/mobile", cwd=monorepo).assert_ok()
+    assert r.stdout.strip() == "none"
+
+
+def test_get_package_override_wins(run, monorepo: Path) -> None:
+    # Override ci_gate at the package; root keeps `none`.
+    run("set", "ci_gate", "gates_merge", "--at", "apps/mobile", cwd=monorepo).assert_ok()
+    r = run("get", "ci_gate", "--at", "apps/mobile", cwd=monorepo).assert_ok()
+    assert r.stdout.strip() == "gates_merge"
+    r = run("get", "ci_gate", "--at", "packages/shared", cwd=monorepo).assert_ok()
+    assert r.stdout.strip() == "none"
+
+
+def test_get_no_key_returns_full_view(run, monorepo: Path) -> None:
+    r = run("get", "--at", "apps/mobile", cwd=monorepo).assert_ok()
+    assert "ci_gate:" in r.stdout
+    assert "lifecycle_stage:" in r.stdout
+
+
+def test_get_descends_to_nearest_package(run, monorepo: Path) -> None:
+    (monorepo / "apps" / "mobile" / "src").mkdir()
+    r = run("get", "--at", "apps/mobile/src", cwd=monorepo).assert_ok()
+    assert "ci_gate:" in r.stdout
+
+
+def test_get_keys_filter(run, monorepo: Path) -> None:
+    r = run(
+        "get", "--at", "apps/mobile", "--keys", "ci_gate,lifecycle_stage", cwd=monorepo
+    ).assert_ok()
+    assert "ci_gate:" in r.stdout
+    assert "lifecycle_stage:" in r.stdout
+    assert "team_mode" not in r.stdout
+
+
+def test_get_keys_rejects_with_positional_key(run, monorepo: Path) -> None:
+    r = run(
+        "get", "ci_gate", "--at", "apps/mobile", "--keys", "ci_gate", cwd=monorepo
+    ).assert_fails(2)
+    assert "--keys" in r.stderr
+
+
+def test_get_format_json(run, monorepo: Path) -> None:
+    r = run(
+        "get",
+        "--at",
+        "apps/mobile",
+        "--keys",
+        "ci_gate,lifecycle_stage",
+        "--format",
+        "json",
+        cwd=monorepo,
+    ).assert_ok()
+    data = json.loads(r.stdout)
+    assert data["ci_gate"] == "none"
+    assert data["lifecycle_stage"] == "pre_launch"
+
+
+def test_get_no_repo_root_errors(run, tmp_path_factory) -> None:
+    """Reading from a path with no .git ancestor (and no --repo-root) errors."""
+    outside = tmp_path_factory.mktemp("levers_outside")
+    r = run("get", "--at", str(outside))
+    # Either it errors (no .git anywhere up) OR the user's filesystem has a .git
+    # somewhere up — but no .levers.yml at that root, which also errors.
+    r.assert_fails()
 
 
 def test_set_changes_value(run, single_repo: Path) -> None:
@@ -204,68 +275,15 @@ def test_add_package_requires_root_levers(run, tmp_repo: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# resolve
+# merge-strictest
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_single_path_returns_merged_view(run, monorepo: Path) -> None:
-    r = run("resolve", "apps/mobile", cwd=monorepo).assert_ok()
-    assert "ci_gate:" in r.stdout
-    assert "lifecycle_stage:" in r.stdout
-
-
-def test_resolve_package_override_wins(run, monorepo: Path) -> None:
-    # Override ci_gate at the package; root keeps `none`.
-    run("set", "ci_gate", "gates_merge", "--at", "apps/mobile", cwd=monorepo).assert_ok()
-    val = run("resolve", "apps/mobile", "--get", "ci_gate", cwd=monorepo).assert_ok()
-    assert val.stdout.strip() == "gates_merge"
-    val = run(
-        "resolve", "packages/shared", "--get", "ci_gate", cwd=monorepo
-    ).assert_ok()
-    assert val.stdout.strip() == "none"
-
-
-def test_resolve_descends_to_nearest_package(run, monorepo: Path) -> None:
-    (monorepo / "apps" / "mobile" / "src").mkdir()
-    r = run("resolve", "apps/mobile/src", cwd=monorepo).assert_ok()
-    assert "ci_gate:" in r.stdout
-
-
-def test_resolve_keys_filter(run, monorepo: Path) -> None:
-    r = run("resolve", "apps/mobile", "--keys", "ci_gate,lifecycle_stage", cwd=monorepo).assert_ok()
-    assert "ci_gate:" in r.stdout
-    assert "lifecycle_stage:" in r.stdout
-    assert "team_mode" not in r.stdout
-
-
-def test_resolve_unknown_key_errors(run, monorepo: Path) -> None:
-    run("resolve", "apps/mobile", "--get", "no_such", cwd=monorepo).assert_fails(2)
-
-
-def test_resolve_format_json(run, monorepo: Path) -> None:
-    r = run(
-        "resolve", "apps/mobile", "--keys", "ci_gate,lifecycle_stage", "--format", "json", cwd=monorepo
-    ).assert_ok()
-    data = json.loads(r.stdout)
-    assert data["ci_gate"] == "none"
-    assert data["lifecycle_stage"] == "pre_launch"
-
-
-def test_resolve_no_repo_root_errors(run, tmp_path_factory) -> None:
-    """Resolving from a path with no .git ancestor (and no --repo-root) errors."""
-    outside = tmp_path_factory.mktemp("levers_outside")
-    r = run("resolve", str(outside))
-    # Either it errors (no .git anywhere up) OR the user's filesystem has a .git
-    # somewhere up — but no .levers.yml at that root, which also errors.
-    r.assert_fails()
-
-
-def test_resolve_merge_strictest_picks_strictest(run, monorepo: Path) -> None:
+def test_merge_strictest_picks_strictest(run, monorepo: Path) -> None:
     run("set", "ci_gate", "gates_merge", "--at", "apps/mobile", cwd=monorepo).assert_ok()
     run("set", "ci_gate", "none", "--at", "packages/shared", cwd=monorepo).assert_ok()
     r = run(
-        "resolve",
-        "--merge-strictest",
+        "merge-strictest",
         "apps/mobile",
         "packages/shared",
         "--keys",
@@ -275,11 +293,10 @@ def test_resolve_merge_strictest_picks_strictest(run, monorepo: Path) -> None:
     assert "ci_gate: gates_merge" in r.stdout
 
 
-def test_resolve_merge_strictest_same_value_shortcut(run, monorepo: Path) -> None:
+def test_merge_strictest_same_value_shortcut(run, monorepo: Path) -> None:
     """If all paths agree, non-strictness-mergeable keys still resolve."""
     r = run(
-        "resolve",
-        "--merge-strictest",
+        "merge-strictest",
         "apps/mobile",
         "packages/shared",
         "--keys",
@@ -289,12 +306,11 @@ def test_resolve_merge_strictest_same_value_shortcut(run, monorepo: Path) -> Non
     assert "versioning: semver" in r.stdout
 
 
-def test_resolve_merge_strictest_diverging_unsupported_key_errors(run, monorepo: Path) -> None:
+def test_merge_strictest_diverging_unsupported_key_errors(run, monorepo: Path) -> None:
     run("set", "versioning", "semver", "--at", "apps/mobile", cwd=monorepo).assert_ok()
     run("set", "versioning", "calver", "--at", "packages/shared", cwd=monorepo).assert_ok()
     r = run(
-        "resolve",
-        "--merge-strictest",
+        "merge-strictest",
         "apps/mobile",
         "packages/shared",
         "--keys",

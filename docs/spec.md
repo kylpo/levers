@@ -64,7 +64,7 @@ Every lever has a **scope** attribute — one of `repo`, `package`, or `either`:
 - **`package`** — declared only at per-package `.levers.yml` files in monorepos. These describe properties that vary per deliverable (lifecycle stage, release model, QA discipline). Declaring a `package`-scoped key at root fails validation. In a single-repo setup, the repo *is* the only package, and `package`-scoped keys are declared at the root file (validated under `--role single`).
 - **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. Useful for levers that often apply repo-wide but sometimes need local override (test strategy, CI gate, auto-merge, design discipline).
 
-See [Monorepo layout](#monorepo-layout) for how these resolve via `levers resolve`.
+See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 ### Lifecycle & risk
 
@@ -144,9 +144,9 @@ A monorepo has a root `.levers.yml` plus one `.levers.yml` per package. A single
 **Effective values at a path** — consumer tools call:
 
 ```bash
-levers resolve <path>                    # full merged view, YAML with provenance header
-levers resolve <path> --get <key>        # single raw value (no fences)
-levers resolve <path> --keys k1,k2       # narrow to a key list
+levers get <key> --at <path>             # single raw value (no fences)
+levers get --at <path>                   # full merged view, YAML with provenance header
+levers get --at <path> --keys k1,k2      # narrow to a key list
 ```
 
 Which:
@@ -156,15 +156,17 @@ Which:
 3. Merges: start with root; overlay package. `either` values override; `package` keys live only in the package file; `repo` keys only at root.
 4. Narrows to the requested key list (if any) and emits YAML or a single raw value.
 
-Consumers never traverse or merge themselves. The key list passed to `levers resolve` serves as an auditable declaration of which levers drive the consumer's behavior.
+Consumers never traverse or merge themselves. The key list passed to `levers get` serves as an auditable declaration of which levers drive the consumer's behavior.
 
-**Cross-package changes** — when a ticket or commit touches files in multiple packages, use `levers detect-packages <paths...>` to enumerate the affected packages. Prefer per-package splitting; when a merged view is unavoidable (e.g., unattended automation), `levers resolve --merge-strictest <paths...>` returns the strictest value per lever per the rules below.
+Reads are always inheritance-aware. Writes (`levers set`) are file-local: writes are explicit about *which* file changes; reads always return the value a consumer at that path would see.
 
-**Single-repo fallback** — on a repo that has no per-package `.levers.yml` files, `levers resolve` returns the root values unchanged. Adoption is package-by-package — a half-configured monorepo still works.
+**Cross-package changes** — when a ticket or commit touches files in multiple packages, use `levers detect-packages <paths...>` to enumerate the affected packages. Prefer per-package splitting; when a merged view is unavoidable (e.g., unattended automation), `levers merge-strictest <paths...>` returns the strictest value per lever per the rules below.
+
+**Single-repo fallback** — on a repo that has no per-package `.levers.yml` files, `levers get` returns the root values unchanged. Adoption is package-by-package — a half-configured monorepo still works.
 
 ### Strictest-wins merge
 
-When `levers resolve --merge-strictest` is called with paths spanning multiple packages, each lever's value is chosen by the rule below. The orderings reflect "which answer is safest if applied to the whole change set." For ties, the leftmost value in the table wins.
+When `levers merge-strictest` is called with paths spanning multiple packages, each lever's value is chosen by the rule below. The orderings reflect "which answer is safest if applied to the whole change set." For ties, the leftmost value in the table wins.
 
 | Lever | Strictness order (strictest → loosest) |
 |---|---|
@@ -178,7 +180,7 @@ When `levers resolve --merge-strictest` is called with paths spanning multiple p
 | `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |
 | `code_review` | `subagent_advisory` → `subagent` → `none` |
 
-Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers resolve --merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
+Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
 
 When all paths agree on a value, the strictness check is bypassed even for levers without a strictness order.
 
