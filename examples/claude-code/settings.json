@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=$(jq -r '.tool_input.command // empty'); if printf '%s' \"$cmd\" | grep -Eq '(^|[^a-zA-Z0-9_/.-])\\.levers\\.yml([^a-zA-Z0-9_/.-]|$)' && ! printf '%s' \"$cmd\" | grep -qE '(^|[[:space:]])levers[[:space:]]+(get|merge-strictest|validate|audit|set|init|add-package|detect-packages|list-enums)'; then printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Use `levers get [<key>] --at <path>` (omit the key for the full merged view) to read the effective value. Reading .levers.yml directly skips inheritance resolution between root and package files.\"}}'; fi"
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); if printf '%s' \"$cmd\" | grep -Eq '(^|[^a-zA-Z0-9_/.-])\\.levers\\.yml([^a-zA-Z0-9_/.-]|$)' && ! printf '%s' \"$cmd\" | grep -qE '(^|[[:space:]])levers[[:space:]]+(get|merge-strictest|validate|audit|set|init|detect-packages|list-enums)'; then printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Use `levers get [<key>] --at <path>` (omit the key for the full merged view) to read the effective value. Reading .levers.yml directly skips inheritance resolution between root and package files.\"}}'; fi"
           }
         ]
       },

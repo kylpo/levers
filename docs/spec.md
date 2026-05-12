@@ -42,7 +42,7 @@ Comments are preserved on roundtrip when written via `levers set` / `levers init
 
 **Human-maintained. Tools should not write to it without explicit instruction.** This is deliberate: a tool that routes on `.levers.yml` values shouldn't also be able to flip them silently. Same rule as `CLAUDE.md`.
 
-`levers set` / `levers init` / `levers add-package` are explicit, user-invoked writes — fine. Anything else (a skill auto-mutating values based on observed state) is not.
+`levers set` / `levers init` are explicit, user-invoked writes — fine. Anything else (a skill auto-mutating values based on observed state) is not.
 
 Update triggers:
 
@@ -190,7 +190,7 @@ Three starters depending on the repo shape:
 
 - [`templates/single.yml`](../templates/single.yml) — **single-repo projects.** All keys in one file. `levers init` (default `--role single`) copies this.
 - [`templates/root.yml`](../templates/root.yml) — **monorepo root.** `repo` + `either` keys. `levers init --role root` copies this.
-- [`templates/package.yml`](../templates/package.yml) — **per-package in a monorepo.** `package` keys (required) + commented-out `either` overrides. `levers add-package <path>` copies this once per detected package.
+- [`templates/package.yml`](../templates/package.yml) — **per-package in a monorepo.** `package` keys (required) + commented-out `either` overrides. `levers init --role package --at <path>` copies this once per detected package.
 
 ## Drift detection
 
@@ -271,7 +271,7 @@ Yes, any project that consumer tools touch should have one. The defaults are cho
 
 ### Can a tool write to `.levers.yml`?
 
-Only via explicit user invocation (`levers set`, `levers init`, `levers add-package`). Same rule as `CLAUDE.md`: a tool that routes on lever values shouldn't also flip them autonomously — the resulting feedback loop ("tool decides to change policy so its own behavior changes") is dangerous. Tools surface drift via `levers audit`; humans decide what to update.
+Only via explicit user invocation (`levers set`, `levers init`). Same rule as `CLAUDE.md`: a tool that routes on lever values shouldn't also flip them autonomously — the resulting feedback loop ("tool decides to change policy so its own behavior changes") is dangerous. Tools surface drift via `levers audit`; humans decide what to update.
 
 ### What if I have a prose body in an old `LEVERS.md` file?
 

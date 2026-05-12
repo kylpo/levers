@@ -20,7 +20,7 @@ def test_version(run) -> None:
 
 def test_help_lists_subcommands(run) -> None:
     r = run("--help").assert_ok()
-    for cmd in ["validate", "list-enums", "get", "set", "init", "add-package", "merge-strictest", "audit", "detect-packages"]:
+    for cmd in ["validate", "list-enums", "get", "set", "init", "merge-strictest", "audit", "detect-packages"]:
         assert cmd in r.stdout, f"--help missing subcommand: {cmd}"
     # `resolve` was folded into `get` (with inheritance) + `merge-strictest`.
     assert "resolve" not in r.stdout
@@ -42,11 +42,6 @@ def test_init_refuses_overwrite_without_force(run, single_repo: Path) -> None:
 
 def test_init_force_overwrites(run, single_repo: Path) -> None:
     run("init", "--force", cwd=single_repo).assert_ok()
-
-
-def test_init_rejects_role_package(run, tmp_repo: Path) -> None:
-    r = run("init", "--role", "package", cwd=tmp_repo).assert_fails(2)
-    assert "add-package" in r.stderr
 
 
 def test_validate_passes_on_template(run, single_repo: Path) -> None:
@@ -253,24 +248,24 @@ def test_list_enums_format_yaml(run) -> None:
 
 
 # ---------------------------------------------------------------------------
-# add-package
+# init --role package
 # ---------------------------------------------------------------------------
 
 
-def test_add_package_succeeds(run, monorepo: Path) -> None:
+def test_init_package_succeeds(run, monorepo: Path) -> None:
     (monorepo / "apps" / "web").mkdir()
-    run("add-package", "apps/web", cwd=monorepo).assert_ok()
+    run("init", "--role", "package", "--at", "apps/web", cwd=monorepo).assert_ok()
     assert (monorepo / "apps" / "web" / ".levers.yml").is_file()
 
 
-def test_add_package_rejects_at_root(run, monorepo: Path) -> None:
-    r = run("add-package", ".", cwd=monorepo).assert_fails(1)
+def test_init_package_rejects_at_root(run, monorepo: Path) -> None:
+    r = run("init", "--role", "package", "--at", ".", cwd=monorepo).assert_fails(1)
     assert "refusing" in r.stderr or "root" in r.stderr
 
 
-def test_add_package_requires_root_levers(run, tmp_repo: Path) -> None:
+def test_init_package_requires_root_levers(run, tmp_repo: Path) -> None:
     (tmp_repo / "apps").mkdir()
-    r = run("add-package", "apps", cwd=tmp_repo).assert_fails(2)
+    r = run("init", "--role", "package", "--at", "apps", cwd=tmp_repo).assert_fails(2)
     assert "no root .levers.yml" in r.stderr
 
 

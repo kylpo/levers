@@ -1016,21 +1016,6 @@ def _template_path(role: Role) -> Path:
     return TEMPLATES_DIR / f"{role.value}.yml"
 
 
-def _write_template(role: Role, target: Path, force: bool) -> None:
-    """Copy a template to `target`, refusing to overwrite without --force."""
-    src = _template_path(role)
-    if not src.exists():
-        raise typer.Exit(_die(f"template not found: {src}"))
-
-    if target.exists() and not force:
-        raise typer.Exit(
-            _die(f"{target} already exists — pass --force to overwrite", code=1)
-        )
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(src.read_bytes())
-
-
 @app.command()
 def init(
     role: Role = typer.Option(
@@ -1059,18 +1044,37 @@ def init(
     By default, opens an interactive editor seeded with the template's
     default values: ↑/↓ select, ←/→ cycle values, ENTER save, ESC cancel.
     Pass --no-interactive (or pipe stdin) to write the template verbatim.
-    """
-    if role is Role.package:
-        raise typer.Exit(
-            _die(
-                "use `levers add-package <path>` to scaffold a package file in a monorepo",
-                code=2,
-            )
-        )
 
+    For `--role package`, the target directory must be inside a git repo
+    that already has a root `.levers.yml`, and must not be the repo root.
+    """
     at_dir = at if at is not None else Path.cwd()
     if at_dir.exists() and not at_dir.is_dir():
         raise typer.Exit(_die(f"{at_dir} is not a directory"))
+
+    if role is Role.package:
+        if not at_dir.exists():
+            raise typer.Exit(_die(f"{at_dir} does not exist"))
+        repo_root = _find_repo_root(at_dir.resolve())
+        if repo_root is None:
+            raise typer.Exit(
+                _die(f"{at_dir} is not inside a git repository — cannot detect monorepo root")
+            )
+        if at_dir.resolve() == repo_root:
+            raise typer.Exit(
+                _die(
+                    "refusing to scaffold a package file at the repo root — that's the root file",
+                    code=1,
+                )
+            )
+        root_levers = repo_root / DEFAULT_FILENAME
+        if not root_levers.exists():
+            raise typer.Exit(
+                _die(
+                    f"no root .levers.yml at {root_levers} — run "
+                    f"`levers init --role root --at {repo_root}` first"
+                )
+            )
 
     target = at_dir / DEFAULT_FILENAME
     src = _template_path(role)
@@ -1198,52 +1202,6 @@ def merge_strictest(
     _emit(merged, fmt, header)
     if fmt is ResolveFormat.yaml:
         typer.echo("---")
-
-
-# ---------------------------------------------------------------------------
-# add-package
-# ---------------------------------------------------------------------------
-
-
-@app.command("add-package")
-def add_package(
-    path: Path = typer.Argument(..., help="Package directory to scaffold a .levers.yml in."),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Overwrite an existing .levers.yml in the package directory.",
-    ),
-) -> None:
-    """Scaffold a package-scoped .levers.yml inside a monorepo."""
-    pkg_dir = path
-    if not pkg_dir.exists():
-        raise typer.Exit(_die(f"{pkg_dir} does not exist"))
-    if not pkg_dir.is_dir():
-        raise typer.Exit(_die(f"{pkg_dir} is not a directory"))
-
-    repo_root = _find_repo_root(pkg_dir.resolve())
-    if repo_root is None:
-        raise typer.Exit(
-            _die(f"{pkg_dir} is not inside a git repository — cannot detect monorepo root")
-        )
-
-    root_levers = repo_root / DEFAULT_FILENAME
-    if not root_levers.exists():
-        raise typer.Exit(
-            _die(
-                f"no root .levers.yml at {root_levers} — run "
-                f"`levers init --role root --at {repo_root}` first"
-            )
-        )
-
-    if pkg_dir.resolve() == repo_root:
-        raise typer.Exit(
-            _die("refusing to add-package at the repo root — that's the root file", code=1)
-        )
-
-    target = pkg_dir / DEFAULT_FILENAME
-    _write_template(Role.package, target, force)
-    typer.echo(f"ok: wrote {target}")
 
 
 # ---------------------------------------------------------------------------

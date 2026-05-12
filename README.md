@@ -67,7 +67,7 @@ A monorepo has a root `.levers.yml` plus one `.levers.yml` per package. Repo-wid
 
 ```bash
 levers init --role root                       # root file (repo-wide policy)
-levers add-package apps/mobile                # per-package file (one per deliverable)
+levers init --role package --at apps/mobile   # per-package file (one per deliverable)
 
 # Effective value(s) at any path (root + nearest-ancestor package, merged)
 levers get ci_gate --at apps/mobile/src       # single raw value

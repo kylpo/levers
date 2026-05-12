@@ -4,7 +4,7 @@
 #   - `levers validate`        — enum + scope checks per role (single|root|package)
 #   - `levers list-enums`      — grouped, scope-annotated output
 #   - `levers merge-strictest`            — strictness ordering across packages
-#   - `levers init` / `add-package`      — required-key enforcement per role
+#   - `levers init`                       — required-key enforcement per role
 #
 # Scope:
 #   repo      — declared only at the root .levers.yml

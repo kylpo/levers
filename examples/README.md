@@ -59,7 +59,7 @@ The workflow needs no secrets — it clones the public [`kylpo/levers`](https://
 
 Two `PreToolUse` hooks that intercept agent access to `.levers.yml` and redirect to `levers get`. Without them, a coding agent reading a package-level `.levers.yml` directly sees only the local overrides — not the merged effective view after inheritance from the root file. The hooks deny:
 
-- **Bash** commands that reference `.levers.yml`, except when the command itself is one of `levers get | merge-strictest | validate | audit | set | init | add-package | detect-packages | list-enums`.
+- **Bash** commands that reference `.levers.yml`, except when the command itself is one of `levers get | merge-strictest | validate | audit | set | init | detect-packages | list-enums`.
 - **Read** of any path matching `.levers.yml`.
 
 Merge [`claude-code/settings.json`](./claude-code/settings.json) into your project's `.claude/settings.json` (or `~/.claude/settings.json` for user-wide). If you already have `hooks.PreToolUse` entries, append these two matchers rather than overwriting the array.
