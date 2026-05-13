@@ -23,8 +23,9 @@ ci_gate: none
 code_review: none
 code_review_concurrency: series
 
-# --- Release & delivery (repo-scoped) ---
-branch_strategy: trunk_based
+# --- Release & delivery ---
+branch_strategy: trunk_based     # repo-scoped
+pr_merge_method: merge           # either-scoped default
 
 # --- Automation ---
 agent_auto_merge: low_risk_only   # either-scoped default

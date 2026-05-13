@@ -115,6 +115,12 @@ levers:
     category: release
     values: [semver, calver, adhoc]
 
+  pr_merge_method:
+    scope: either
+    category: release
+    values: [merge, squash, rebase]
+    strictness: [merge, rebase, squash]
+
   # --- Automation ---
   agent_auto_merge:
     scope: either

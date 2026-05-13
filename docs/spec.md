@@ -181,6 +181,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |
 | `code_review` | `subagent_advisory` → `subagent` → `inline` → `none` |
 | `code_review_concurrency` | `series` → `parallel` |
+| `pr_merge_method` | `merge` → `rebase` → `squash` |
 
 Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
 

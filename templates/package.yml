@@ -29,3 +29,4 @@ changelog_style: curated
 # agent_auto_merge: low_risk_only
 # planning_horizon: phased
 # doc_sync: inline
+# pr_merge_method: merge

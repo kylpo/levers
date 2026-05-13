@@ -47,6 +47,7 @@ Use this document at the start of a project to justify the shape you land on, an
 | [6.3 Feature flags](#63-feature-flags) | **None:** simple; what's in main is shipped | **Flagged:** progressive rollout, A/B, kill switches; flag debt accrues |
 | [6.4 Release cadence](#64-release-cadence) | **On-demand:** responsive, unpredictable for users | **Fixed cadence:** predictable, slips urgent changes without hotfix path |
 | [6.5 Versioning](#65-versioning-discipline) | **SemVer:** downstream trust; every change needs classification | **Ad-hoc / CalVer:** fast; no compatibility signal |
+| [6.6 PR merge method](#66-pr-merge-method) | **Merge:** full history + merge boundary; non-linear log | **Squash:** one commit per PR; loses per-commit intent. **Rebase:** linear + per-commit; no merge boundary, SHAs change |
 | **7. Knowledge & documentation** | | |
 | [7.1 SoT direction](#71-docs-as-source-of-truth-vs-code-as-source-of-truth) | **Docs-as-SoT:** rewrite-survivable; sync enforcement required | **Code-as-SoT:** fast; docs decay; readers stop trusting them |
 | [7.2 Decision capture](#72-decision-capture) | **Informal (chat, heads):** no ceremony; "why" vanishes in months | **ADR log:** audit, supersession tracking, rejected-alternative memory |
@@ -598,6 +599,22 @@ Use this document at the start of a project to justify the shape you land on, an
 **Calendar versioning (2026.4.1 style).**
 - *Unlocks:* freedom from classification. Version reflects date.
 - *Closes:* backward-compat signaling. Users can't tell "is this safe to upgrade to?" from the version alone.
+
+## 6.6 PR merge method
+
+**The question:** when a PR lands, how do its commits enter the base branch?
+
+**Merge (`gh pr merge --merge`).**
+- *Unlocks:* full per-commit history preserved, plus an explicit merge-commit boundary. Tools that revert-a-feature or bisect-across-a-feature have a clean handle.
+- *Closes:* a linear log. `git log --oneline main` shows merge commits interleaved with feature commits.
+
+**Squash (`gh pr merge --squash`).**
+- *Unlocks:* one commit per PR. `git log` reads like a ticket list. Easy to revert a feature with a single `git revert`.
+- *Closes:* per-commit intent. Reviewer's commit-by-commit walkthrough is gone after merge. Tickets that reference individual commits lose those references.
+
+**Rebase (`gh pr merge --rebase`).**
+- *Unlocks:* linear history *and* per-commit intent. No merge commits cluttering `git log`.
+- *Closes:* the merge-commit boundary (no clean "this PR" handle in `git log`). Commit SHAs change on land, so anyone with the pre-merge branch checked out has stale refs.
 
 ---
 
