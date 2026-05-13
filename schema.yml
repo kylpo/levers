@@ -138,6 +138,12 @@ levers:
     category: automation
     values: [comment, empty_pr]
 
+  agent_breadcrumbs:
+    scope: either
+    category: automation
+    values: [off, on]
+    strictness: [on, off]
+
   # --- Documentation ---
   changelog_style:
     scope: package

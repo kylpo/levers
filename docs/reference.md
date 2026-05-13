@@ -772,6 +772,20 @@ Use this document at the start of a project to justify the shape you land on, an
 
 ---
 
+## 8.6 Agent breadcrumb posting
+
+**The question:** when an agent runs a pipeline step that produces intermediate findings — a review report, a TDD verdict, a test-surface sketch, a hand-off summary — does that artifact get posted to the ticket/PR conversation, or does it live only in the agent's local transcript?
+
+**Off — artifacts stay in the transcript.**
+- *Unlocks:* quiet timelines. The issue and PR conversation reflect human discussion only, not agent step-by-step output.
+- *Closes:* asynchronous review. A reviewer or downstream worker who didn't watch the agent run has no record of what it considered, what it ruled out, or what it deferred. Re-running to inspect is the only path back.
+
+**On — every breadcrumb posts to the auto-discovered target (PR if one exists, else the issue).**
+- *Unlocks:* traceable hand-off. The timeline shows TDD verdict, test-surface sketch, review findings, decisions consulted, and the final summary at the boundaries where they were produced. Humans picking up later, and downstream agents continuing the chain, can read the trail without replaying the session.
+- *Closes:* signal-to-noise. Long-running tickets accumulate many comments; the human conversation gets diluted unless filtered. Requires that consumers (PR review tooling, notification preferences) cope with the volume.
+
+---
+
 # 9. Feedback & iteration
 
 ## 9.1 Metrics / experimentation culture

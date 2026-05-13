@@ -33,6 +33,7 @@ pr_merge_method: merge
 agent_auto_merge: low_risk_only
 bug_intake: manual
 ticket_claim: comment
+agent_breadcrumbs: off
 
 # --- Documentation ---
 changelog_style: curated
