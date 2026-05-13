@@ -93,6 +93,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `manual_qa_capture` | `package` | `captured` \| `not_captured` |
 | `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
 | `code_review` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
+| `code_review_concurrency` | `either` | `series` \| `parallel` |
 
 ### Release & delivery
 
@@ -129,7 +130,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|
 | `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `manual_qa_capture`, `changelog_style` |
-| `either` | `test_strategy`, `ci_gate`, `agent_auto_merge`, `planning_horizon`, `doc_sync`, `code_review` |
+| `either` | `test_strategy`, `ci_gate`, `agent_auto_merge`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
 
 ## Monorepo layout
 
@@ -179,6 +180,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `planning_horizon` | `big_bang` → `phased` → `just_in_time` |
 | `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |
 | `code_review` | `subagent_advisory` → `subagent` → `inline` → `none` |
+| `code_review_concurrency` | `series` → `parallel` |
 
 Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
 

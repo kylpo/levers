@@ -87,6 +87,12 @@ levers:
     values: [none, inline, subagent, subagent_advisory]
     strictness: [subagent_advisory, subagent, inline, none]
 
+  code_review_concurrency:
+    scope: either
+    category: quality
+    values: [series, parallel]
+    strictness: [series, parallel]
+
   # --- Release & delivery ---
   release_model:
     scope: package

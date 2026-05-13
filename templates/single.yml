@@ -20,6 +20,7 @@ test_strategy: coverage_delta
 manual_qa_capture: captured
 ci_gate: none
 code_review: none
+code_review_concurrency: series
 
 # --- Release & delivery ---
 release_model: batched_feature_scoped

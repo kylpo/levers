@@ -398,3 +398,30 @@ def test_audit_ci_gate_drift(run, monorepo: Path) -> None:
     )
     r = run("audit", "--root", cwd=monorepo).assert_ok()
     assert "ci_gate" in r.stdout
+
+
+def test_audit_flags_subagent_parallel_root(run, monorepo: Path) -> None:
+    run("set", "code_review", "subagent", cwd=monorepo).assert_ok()
+    run("set", "code_review_concurrency", "parallel", cwd=monorepo).assert_ok()
+    r = run("audit", "--root", cwd=monorepo).assert_ok()
+    assert "code_review_concurrency" in r.stdout
+    assert "conflicting edits" in r.stdout
+
+
+def test_audit_subagent_advisory_parallel_is_safe(run, monorepo: Path) -> None:
+    run("set", "code_review", "subagent_advisory", cwd=monorepo).assert_ok()
+    run("set", "code_review_concurrency", "parallel", cwd=monorepo).assert_ok()
+    r = run("audit", "--root", cwd=monorepo).assert_ok()
+    assert "code_review_concurrency" not in r.stdout
+
+
+def test_audit_flags_subagent_parallel_package(run, monorepo: Path) -> None:
+    run(
+        "set", "code_review", "subagent", "--at", "apps/mobile", cwd=monorepo
+    ).assert_ok()
+    run(
+        "set", "code_review_concurrency", "parallel", "--at", "apps/mobile",
+        cwd=monorepo,
+    ).assert_ok()
+    r = run("audit", cwd=monorepo).assert_ok()
+    assert "code_review_concurrency" in r.stdout

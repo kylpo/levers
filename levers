@@ -1347,6 +1347,19 @@ def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
                 "(or override per-package).",
             ))
 
+    # code_review: subagent + code_review_concurrency: parallel
+    if (
+        data.get("code_review") == "subagent"
+        and data.get("code_review_concurrency") == "parallel"
+    ):
+        warnings.append((
+            "root",
+            "declared `code_review: subagent` with `code_review_concurrency: parallel` "
+            "— reviewers writing to the same files concurrently can produce conflicting "
+            "edits; flip concurrency to `series`, or switch code_review to "
+            "`subagent_advisory` (dispatcher applies, no write contention).",
+        ))
+
     return warnings
 
 
@@ -1439,6 +1452,19 @@ def _audit_package(repo_root: Path, pkg_dir: Path) -> list[tuple[str, str]]:
             rel,
             "declared `release_model: continuous` but `release_cadence: milestone` "
             "— these contradict.",
+        ))
+
+    # code_review: subagent + code_review_concurrency: parallel
+    if (
+        data.get("code_review") == "subagent"
+        and data.get("code_review_concurrency") == "parallel"
+    ):
+        warnings.append((
+            rel,
+            "declared `code_review: subagent` with `code_review_concurrency: parallel` "
+            "— reviewers writing to the same files concurrently can produce conflicting "
+            "edits; flip concurrency to `series`, or switch code_review to "
+            "`subagent_advisory` (dispatcher applies, no write contention).",
         ))
 
     return warnings

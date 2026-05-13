@@ -61,6 +61,14 @@ levers audit --strict         # exit non-zero on any warning (intended for CI)
 
 **Action:** pick the one that matches reality. Continuous → `on_demand` / `weekly` / `biweekly`. Milestone → `batched_timeline` / `release_branch`.
 
+### `code_review` + `code_review_concurrency` contradiction (root or package)
+
+> declared `code_review: subagent` with `code_review_concurrency: parallel` — reviewers writing to the same files concurrently can produce conflicting edits
+
+**Trigger:** `code_review: subagent` (reviewers apply edits directly) combined with `code_review_concurrency: parallel`. Concurrent reviewers writing the same files race on overlapping edits.
+
+**Action:** flip concurrency to `series` (reviewers run one at a time, each seeing the prior reviewer's fixes), or switch `code_review` to `subagent_advisory` (reviewers return manifests; the dispatcher applies them — no write contention, so `parallel` is safe).
+
 ## Tag-matching convention
 
 Per-package tag checks (`lifecycle_stage`, `versioning`) use this convention to associate a tag with a package:

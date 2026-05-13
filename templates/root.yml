@@ -21,6 +21,7 @@ planning_horizon: phased
 test_strategy: coverage_delta
 ci_gate: none
 code_review: none
+code_review_concurrency: series
 
 # --- Release & delivery (repo-scoped) ---
 branch_strategy: trunk_based
