@@ -31,7 +31,8 @@ pr_merge_method: merge           # either-scoped default
 agent_auto_merge: low_risk_only   # either-scoped default
 bug_intake: manual                # repo-scoped
 ticket_claim: comment             # either-scoped default
-agent_breadcrumbs: off            # either-scoped default
+agent_breadcrumb_commits: off     # either-scoped default
+agent_breadcrumb_comments: off    # either-scoped default
 
 # --- Documentation (either-scoped default) ---
 doc_sync: inline

@@ -27,7 +27,8 @@ changelog_style: curated
 # code_review: none
 # code_review_concurrency: series
 # agent_auto_merge: low_risk_only
-# agent_breadcrumbs: off
+# agent_breadcrumb_commits: off
+# agent_breadcrumb_comments: off
 # planning_horizon: phased
 # doc_sync: inline
 # pr_merge_method: merge

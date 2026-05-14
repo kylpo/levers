@@ -772,7 +772,7 @@ Use this document at the start of a project to justify the shape you land on, an
 
 ---
 
-## 8.6 Agent breadcrumb posting
+## 8.6 Agent breadcrumb posting (comments)
 
 **The question:** when an agent runs a pipeline step that produces intermediate findings — a review report, a TDD verdict, a test-surface sketch, a hand-off summary — does that artifact get posted to the ticket/PR conversation, or does it live only in the agent's local transcript?
 
@@ -783,6 +783,18 @@ Use this document at the start of a project to justify the shape you land on, an
 **On — every breadcrumb posts to the auto-discovered target (PR if one exists, else the issue).**
 - *Unlocks:* traceable hand-off. The timeline shows TDD verdict, test-surface sketch, review findings, decisions consulted, and the final summary at the boundaries where they were produced. Humans picking up later, and downstream agents continuing the chain, can read the trail without replaying the session.
 - *Closes:* signal-to-noise. Long-running tickets accumulate many comments; the human conversation gets diluted unless filtered. Requires that consumers (PR review tooling, notification preferences) cope with the volume.
+
+## 8.7 Agent breadcrumb commits
+
+**The question:** when an agent runs a multi-step pipeline (worker implementation, then one or more review passes), does each step land as its own commit, or do all the edits roll into one combined commit at the end?
+
+**Off — one combined commit.**
+- *Unlocks:* clean git history. One commit per ticket; the log reads as human-authored. Bisects and blame point at the ticket, not at intermediate reviewer fixes.
+- *Closes:* per-step traceability in the log. Reviewers and humans can't see "this was the worker output, this was the correctness fix" from `git log` alone — the audit trail lives in the agent transcript or PR comments instead.
+
+**On — per-step commits (worker, then one commit per reviewer that applied fixes).**
+- *Unlocks:* per-step auditability in the log. `git log` shows exactly what the worker produced and what each reviewer changed on top. Pre-commit hooks fire on every step, catching regressions at the boundary where they were introduced rather than at the end.
+- *Closes:* clean git history. The log grows reviewer-prefixed commits (`review-correctness: apply fixes`, …) that dilute the ticket-level narrative. Squash merges hide the breakdown; non-squash merges leak it into `main`.
 
 ---
 

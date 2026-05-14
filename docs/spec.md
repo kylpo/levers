@@ -110,7 +110,8 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|---|
 | `agent_auto_merge` | `either` | `none` \| `low_risk_only` \| `all` |
 | `bug_intake` | `repo` | `manual` \| `funneled` |
-| `agent_breadcrumbs` | `either` | `off` \| `on` |
+| `agent_breadcrumb_commits` | `either` | `off` \| `on` |
+| `agent_breadcrumb_comments` | `either` | `off` \| `on` |
 
 ### Documentation
 
@@ -131,7 +132,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|
 | `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `manual_qa_capture`, `changelog_style` |
-| `either` | `test_strategy`, `ci_gate`, `agent_auto_merge`, `agent_breadcrumbs`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
+| `either` | `test_strategy`, `ci_gate`, `agent_auto_merge`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
 
 ## Monorepo layout
 
@@ -173,7 +174,8 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | Lever | Strictness order (strictest → loosest) |
 |---|---|
 | `agent_auto_merge` | `none` → `low_risk_only` → `all` |
-| `agent_breadcrumbs` | `on` → `off` |
+| `agent_breadcrumb_commits` | `on` → `off` |
+| `agent_breadcrumb_comments` | `on` → `off` |
 | `ci_gate` | `gates_merge` → `advisory` → `none` |
 | `test_strategy` | `coverage_delta` → `test_after` → `manual_only` |
 | `lifecycle_stage` | `mature` → `post_launch` → `pre_launch` → `prototype` |

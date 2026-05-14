@@ -138,7 +138,13 @@ levers:
     category: automation
     values: [comment, empty_pr]
 
-  agent_breadcrumbs:
+  agent_breadcrumb_commits:
+    scope: either
+    category: automation
+    values: [off, on]
+    strictness: [on, off]
+
+  agent_breadcrumb_comments:
     scope: either
     category: automation
     values: [off, on]
