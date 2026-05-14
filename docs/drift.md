@@ -69,6 +69,14 @@ levers audit --strict         # exit non-zero on any warning (intended for CI)
 
 **Action:** flip concurrency to `series` (reviewers run one at a time, each seeing the prior reviewer's fixes), or switch `code_review` to `subagent_advisory` (reviewers return manifests; the dispatcher applies them — no write contention, so `parallel` is safe).
 
+### `agent_breadcrumb_commits` + active pre-commit hook (root or package)
+
+> declared `agent_breadcrumb_commits: on` with an executable `.git/hooks/pre-commit` installed
+
+**Trigger:** `agent_breadcrumb_commits: on` declared, and `.git/hooks/pre-commit` exists and is executable. Git's bundled `pre-commit.sample` is ignored — only the literal `pre-commit` filename runs. Reviewer breadcrumb commits go through the same hook as every other commit, so a hook that aborts (lint failure, formatter rewrite, etc.) breaks review flows like `/review-all`.
+
+**Action:** flip `agent_breadcrumb_commits` to `off`, or have the hook short-circuit on agent-authored commits (e.g., skip when the committer email matches a known agent, or when the commit message carries a breadcrumb marker).
+
 ## Tag-matching convention
 
 Per-package tag checks (`lifecycle_stage`, `versioning`) use this convention to associate a tag with a package:

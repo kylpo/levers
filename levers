@@ -1311,6 +1311,20 @@ def _workflows_mention(workflows_dir: Path, *needles: str) -> bool:
     return False
 
 
+def _pre_commit_hook_active(repo_root: Path) -> bool:
+    """True iff a real (non-sample) pre-commit hook is installed and executable.
+
+    Git's own `.git/hooks/pre-commit.sample` is ignored — only the literal
+    `pre-commit` filename is invoked by git, and that's the only one capable
+    of aborting a commit.
+    """
+    hook = repo_root / ".git" / "hooks" / "pre-commit"
+    try:
+        return hook.is_file() and os.access(hook, os.X_OK)
+    except OSError:
+        return False
+
+
 def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
     """Drift warnings for the root .levers.yml. Returns (context, message) tuples."""
     warnings: list[tuple[str, str]] = []
@@ -1358,6 +1372,17 @@ def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
             "— reviewers writing to the same files concurrently can produce conflicting "
             "edits; flip concurrency to `series`, or switch code_review to "
             "`subagent_advisory` (dispatcher applies, no write contention).",
+        ))
+
+    # agent_breadcrumb_commits: on + active pre-commit hook
+    if data.get("agent_breadcrumb_commits") == "on" and _pre_commit_hook_active(repo_root):
+        warnings.append((
+            "root",
+            "declared `agent_breadcrumb_commits: on` with an executable "
+            "`.git/hooks/pre-commit` installed — reviewer breadcrumb commits "
+            "run through that hook and can abort, breaking review flows; flip "
+            "`agent_breadcrumb_commits` to `off`, or have the hook short-circuit "
+            "on agent-authored commits.",
         ))
 
     return warnings
@@ -1465,6 +1490,17 @@ def _audit_package(repo_root: Path, pkg_dir: Path) -> list[tuple[str, str]]:
             "— reviewers writing to the same files concurrently can produce conflicting "
             "edits; flip concurrency to `series`, or switch code_review to "
             "`subagent_advisory` (dispatcher applies, no write contention).",
+        ))
+
+    # agent_breadcrumb_commits: on + active pre-commit hook
+    if data.get("agent_breadcrumb_commits") == "on" and _pre_commit_hook_active(repo_root):
+        warnings.append((
+            rel,
+            "declared `agent_breadcrumb_commits: on` with an executable "
+            "`.git/hooks/pre-commit` installed — reviewer breadcrumb commits "
+            "run through that hook and can abort, breaking review flows; flip "
+            "`agent_breadcrumb_commits` to `off`, or have the hook short-circuit "
+            "on agent-authored commits.",
         ))
 
     return warnings
