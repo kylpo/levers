@@ -97,6 +97,30 @@ class Schema:
     def strictness(self, key: str) -> Optional[list[str]]:
         return self.levers[key].get("strictness")
 
+    def depends_on(self, key: str) -> Optional[dict]:
+        return self.levers[key].get("depends_on")
+
+    def is_enabled(self, key: str, effective: dict) -> tuple[bool, Optional[str]]:
+        """Resolve a lever's dependency-gated enabled state against `effective` values.
+
+        Returns (True, None) when no dependency is declared or it's satisfied;
+        otherwise (False, human-readable reason).
+        """
+        dep = self.depends_on(key)
+        if dep is None:
+            return True, None
+        dep_key = dep["key"]
+        enabled_when = list(dep["enabled_when"])
+        dep_value = effective.get(dep_key)
+        if dep_value in enabled_when:
+            return True, None
+        if len(enabled_when) == 1:
+            reason = f"N/A while `{dep_key} != {enabled_when[0]}`"
+        else:
+            allowed = " | ".join(str(v) for v in enabled_when)
+            reason = f"N/A while `{dep_key}` not in [{allowed}]"
+        return False, reason
+
     def required_for(self, role: Role) -> set[str]:
         """Keys a .levers.yml of this role must declare."""
         if role is Role.single:
@@ -164,6 +188,29 @@ def _die(msg: str, code: int = 2) -> int:
 
 def _warn(msg: str) -> None:
     typer.echo(f"warning: {msg}", err=True)
+
+
+def _fmt_values(values: list, sep: str = ", ") -> str:
+    """Join schema values into a display string. Handles mixed str/int lists."""
+    return sep.join(str(v) for v in values)
+
+
+def _coerce_value(raw: str, allowed: list):
+    """Map a CLI-supplied string `raw` to its matching entry in `allowed`.
+
+    Strings match directly; integer-shaped strings (`"3"`) match an integer
+    `3` in the allowed list. Returns the matched value (preserving its type)
+    or raises `ValueError` with an actionable message.
+    """
+    if raw in allowed:
+        return raw
+    try:
+        as_int = int(raw)
+    except ValueError:
+        as_int = None
+    if as_int is not None and as_int in allowed:
+        return as_int
+    raise ValueError(f"invalid value {raw!r} — allowed: {_fmt_values(allowed)}")
 
 
 # ---------------------------------------------------------------------------
@@ -331,30 +378,34 @@ _C_FOCUS = "\x1b[7m"
 
 
 def _render_value_strip(
-    values: list[str],
-    anchor: Optional[str],
-    focus: Optional[str],
+    values: list,
+    anchor,
+    focus,
     color: bool,
+    enabled: bool = True,
 ) -> str:
     """Render one row's enum as a horizontal strip with anchor + focus highlights.
 
     `anchor` is what survives ESC (the file's saved value, may be None for
     unset rows). `focus` is where ←/→ currently sits (saves on ENTER, may
     be None for an unset+untouched row). When the two coincide, focus wins.
-    Pure.
+    When `enabled` is False, suppress focus highlighting (the row can't be
+    edited) and show the anchor in parentheses so the saved value is still
+    visible. Pure.
     """
     cells: list[str] = []
     for v in values:
-        if v == focus and color:
-            cells.append(f"{_C_FOCUS} {v} {_C_RESET}")
-        elif v == focus:
-            cells.append(f"[{v}]")
+        s = str(v)
+        if enabled and v == focus and color:
+            cells.append(f"{_C_FOCUS} {s} {_C_RESET}")
+        elif enabled and v == focus:
+            cells.append(f"[{s}]")
         elif v == anchor and color:
-            cells.append(f"{_C_ANCHOR} {v} {_C_RESET}")
+            cells.append(f"{_C_ANCHOR} {s} {_C_RESET}")
         elif v == anchor:
-            cells.append(f"({v})")
+            cells.append(f"({s})")
         else:
-            cells.append(f" {v} ")
+            cells.append(f" {s} ")
     return " ".join(cells)
 
 
@@ -378,13 +429,20 @@ def _render(
         assert key is not None
         cur = current.get(key)
         init = initial.get(key)
+        enabled, reason = schema.is_enabled(key, current)
         is_row_focus = i == selected
-        is_changed = cur != init
+        is_changed = enabled and cur != init
         row_marker = _ansi("►", _C_CYAN, color) if is_row_focus else " "
         change_mark = _ansi("*", _C_YELLOW, color) if is_changed else " "
         label = key.ljust(22)
-        strip = _render_value_strip(schema.values_for(key), anchor=init, focus=cur, color=color)
-        lines.append(f"{row_marker} {change_mark} {label} {strip}")
+        strip = _render_value_strip(
+            schema.values_for(key), anchor=init, focus=cur, color=color, enabled=enabled
+        )
+        if not enabled:
+            row = f"{row_marker}   {label} {strip}    {reason}"
+            lines.append(_ansi(row, _C_DIM, color))
+        else:
+            lines.append(f"{row_marker} {change_mark} {label} {strip}")
     lines.append("")
     lines.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
     if color:
@@ -464,9 +522,11 @@ def _tui_edit(
                     e = entries[selected]
                     if e.kind == "row":
                         assert e.key is not None
-                        values = schema.values_for(e.key)
-                        direction = -1 if key is _Key.LEFT else +1
-                        current[e.key] = _advance(values, current[e.key], direction)
+                        enabled, _reason = schema.is_enabled(e.key, current)
+                        if enabled:
+                            values = schema.values_for(e.key)
+                            direction = -1 if key is _Key.LEFT else +1
+                            current[e.key] = _advance(values, current[e.key], direction)
                 else:
                     continue
                 _redraw()
@@ -570,7 +630,7 @@ def _validate_one(target: Path, role: Role, schema: Schema) -> bool:
         allowed = schema.values_for(key)
         if value not in allowed:
             errors.append(
-                f"{key}: invalid value {value!r} — allowed: {', '.join(allowed)}"
+                f"{key}: invalid value {value!r} — allowed: {_fmt_values(allowed)}"
             )
 
     if errors:
@@ -694,9 +754,13 @@ def list_enums(
         values = schema.values_for(key)
         scope = schema.scope(key)
         if fmt is EnumFormat.yaml:
-            typer.echo(f"{key}: [{', '.join(values)}]")
+            typer.echo(f"{key}: [{_fmt_values(values)}]")
         else:
-            typer.echo(f"{key} ({scope}): {' | '.join(values)}")
+            typer.echo(f"{key} ({scope}): {_fmt_values(values, sep=' | ')}")
+            dep = schema.depends_on(key)
+            if dep is not None:
+                allowed = _fmt_values(dep["enabled_when"], sep=" | ")
+                typer.echo(f"  (enabled when {dep['key']} in [{allowed}])")
         return
 
     # Filter keys by role
@@ -719,7 +783,7 @@ def list_enums(
                 continue
             typer.echo(f"# {schema.category_label(cat_id)}")
             for k in keys:
-                typer.echo(f"{k}: [{', '.join(schema.values_for(k))}]")
+                typer.echo(f"{k}: [{_fmt_values(schema.values_for(k))}]")
         return
 
     # Text output: grouped, scope-annotated
@@ -730,8 +794,12 @@ def list_enums(
         typer.echo(f"# {schema.category_label(cat_id)}")
         for k in keys:
             scope = schema.scope(k)
-            values = " | ".join(schema.values_for(k))
+            values = _fmt_values(schema.values_for(k), sep=" | ")
             typer.echo(f"  {k} ({scope}): {values}")
+            dep = schema.depends_on(k)
+            if dep is not None:
+                allowed = _fmt_values(dep["enabled_when"], sep=" | ")
+                typer.echo(f"    (enabled when {dep['key']} in [{allowed}])")
         typer.echo("")
 
 
@@ -775,10 +843,33 @@ def _abs_or_absolute(p: Path) -> Path:
     return p.resolve() if p.exists() else p.absolute()
 
 
-def _resolve_one(target: Path, repo_root_override: Optional[Path]) -> dict:
+def _apply_disabled_defaults(data: dict, schema: Schema) -> dict:
+    """Override gated-off levers with their schema-declared `disabled_default`.
+
+    A lever whose `depends_on` constraint isn't satisfied is reported as the
+    declared `disabled_default` (typically the `off` equivalent) to every
+    read path — `get`, `merge-strictest`, etc. The underlying file content
+    is untouched; only the effective view shifts. Pure.
+    """
+    out = dict(data)
+    for key in list(out.keys()):
+        dep = schema.depends_on(key)
+        if dep is None or "disabled_default" not in dep:
+            continue
+        if data.get(dep["key"]) not in dep["enabled_when"]:
+            out[key] = dep["disabled_default"]
+    return out
+
+
+def _resolve_one(
+    target: Path,
+    repo_root_override: Optional[Path],
+    schema: Optional[Schema] = None,
+) -> dict:
     """Compute the effective .levers.yml view for a single path.
 
     Returns: {"data": merged_dict, "root_file": Path, "pkg_file": Path | None}
+    Applies `disabled_default` overrides when `schema` is provided.
     """
     if repo_root_override is not None:
         repo_root = repo_root_override.resolve()
@@ -811,6 +902,9 @@ def _resolve_one(target: Path, repo_root_override: Optional[Path]) -> dict:
     else:
         pkg_file = None
         merged = dict(root_data)
+
+    if schema is not None:
+        merged = _apply_disabled_defaults(merged, schema)
 
     return {"data": merged, "root_file": root_file, "pkg_file": pkg_file}
 
@@ -892,7 +986,7 @@ def get(
 
     target = at if at is not None else Path.cwd()
     try:
-        r = _resolve_one(target, repo_root)
+        r = _resolve_one(target, repo_root, schema)
     except ResolveError as exc:
         raise typer.Exit(_die(str(exc), code=1))
 
@@ -989,22 +1083,22 @@ def set_(
         raise typer.Exit(_die(f"unknown key: {key}"))
 
     allowed = schema.values_for(key)
-    if value not in allowed:
-        raise typer.Exit(
-            _die(f"invalid value {value!r} for {key} — allowed: {', '.join(allowed)}")
-        )
+    try:
+        coerced = _coerce_value(value, allowed)
+    except ValueError as exc:
+        raise typer.Exit(_die(f"{exc} for {key}"))
 
     data = load_yaml(target)
     previous = data.get(key)
-    data[key] = value
+    data[key] = coerced
     dump_yaml(data, target)
 
     if previous is None:
-        typer.echo(f"ok: {target} {key} = {value} (added)")
-    elif previous == value:
-        typer.echo(f"ok: {target} {key} = {value} (unchanged)")
+        typer.echo(f"ok: {target} {key} = {coerced} (added)")
+    elif previous == coerced:
+        typer.echo(f"ok: {target} {key} = {coerced} (unchanged)")
     else:
-        typer.echo(f"ok: {target} {key}: {previous} → {value}")
+        typer.echo(f"ok: {target} {key}: {previous} → {coerced}")
 
 
 # ---------------------------------------------------------------------------
@@ -1166,7 +1260,7 @@ def merge_strictest(
     resolved: list[dict] = []
     for p in paths:
         try:
-            resolved.append(_resolve_one(p, repo_root))
+            resolved.append(_resolve_one(p, repo_root, schema))
         except ResolveError as exc:
             raise typer.Exit(_die(str(exc), code=1))
 

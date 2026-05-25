@@ -92,6 +92,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `test_strategy` | `either` | `coverage_delta` \| `test_after` \| `manual_only` |
 | `manual_qa_capture` | `package` | `captured` \| `not_captured` |
 | `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
+| `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
 | `code_review` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
 | `code_review_concurrency` | `either` | `series` \| `parallel` |
 
@@ -132,7 +133,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|
 | `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `manual_qa_capture`, `changelog_style` |
-| `either` | `test_strategy`, `ci_gate`, `agent_auto_merge`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
+| `either` | `test_strategy`, `ci_gate`, `ci_retry`, `agent_auto_merge`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
 
 ## Monorepo layout
 
@@ -177,6 +178,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `agent_breadcrumb_commits` | `on` → `off` |
 | `agent_breadcrumb_comments` | `on` → `off` |
 | `ci_gate` | `gates_merge` → `advisory` → `none` |
+| `ci_retry` | `off` → `1` → `2` → `3` → `until_fixed` |
 | `test_strategy` | `coverage_delta` → `test_after` → `manual_only` |
 | `lifecycle_stage` | `mature` → `post_launch` → `pre_launch` → `prototype` |
 | `manual_qa_capture` | `captured` → `not_captured` |

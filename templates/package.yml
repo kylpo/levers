@@ -24,6 +24,7 @@ changelog_style: curated
 # --- Either-scoped overrides (optional — uncomment and set to override root) ---
 # test_strategy: coverage_delta
 # ci_gate: none
+# ci_retry: off
 # code_review: none
 # code_review_concurrency: series
 # agent_auto_merge: low_risk_only

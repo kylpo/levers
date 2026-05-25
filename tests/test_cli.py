@@ -247,6 +247,53 @@ def test_list_enums_format_yaml(run) -> None:
     assert "ci_gate: [none, advisory, gates_merge]" in r.stdout
 
 
+def test_list_enums_shows_numeric_values(run) -> None:
+    r = run("list-enums", "--key", "ci_retry").assert_ok()
+    assert r.stdout.splitlines()[0] == (
+        "ci_retry (either): off | 1 | 2 | 3 | until_fixed"
+    )
+
+
+def test_list_enums_shows_dependency_annotation(run) -> None:
+    r = run("list-enums", "--key", "ci_retry").assert_ok()
+    assert "enabled when ci_gate in [gates_merge]" in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# Numeric value handling (ci_retry)
+# ---------------------------------------------------------------------------
+
+
+def test_set_accepts_numeric_value(run, single_repo: Path) -> None:
+    run("set", "ci_gate", "gates_merge", cwd=single_repo).assert_ok()
+    run("set", "ci_retry", "3", cwd=single_repo).assert_ok()
+    r = run("get", "ci_retry", cwd=single_repo).assert_ok()
+    assert r.stdout.strip() == "3"
+
+
+def test_set_accepts_off_and_until_fixed(run, single_repo: Path) -> None:
+    run("set", "ci_gate", "gates_merge", cwd=single_repo).assert_ok()
+    run("set", "ci_retry", "until_fixed", cwd=single_repo).assert_ok()
+    assert run("get", "ci_retry", cwd=single_repo).stdout.strip() == "until_fixed"
+    run("set", "ci_retry", "off", cwd=single_repo).assert_ok()
+    assert run("get", "ci_retry", cwd=single_repo).stdout.strip() == "off"
+
+
+def test_set_rejects_out_of_range_numeric(run, single_repo: Path) -> None:
+    r = run("set", "ci_retry", "9", cwd=single_repo).assert_fails(2)
+    assert "invalid value" in r.stderr
+
+
+def test_get_disabled_lever_returns_disabled_default(run, single_repo: Path) -> None:
+    # Stash a non-default ci_retry on disk, then verify reads see the
+    # gated-off override (`off`) while ci_gate is not gates_merge.
+    run("set", "ci_retry", "3", cwd=single_repo).assert_ok()
+    assert run("get", "ci_retry", cwd=single_repo).stdout.strip() == "off"
+    # Flip ci_gate to gates_merge → the saved value becomes live.
+    run("set", "ci_gate", "gates_merge", cwd=single_repo).assert_ok()
+    assert run("get", "ci_retry", cwd=single_repo).stdout.strip() == "3"
+
+
 # ---------------------------------------------------------------------------
 # init --role package
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ planning_horizon: phased
 # --- Quality (either-scoped defaults) ---
 test_strategy: coverage_delta
 ci_gate: none
+ci_retry: off
 code_review: none
 code_review_concurrency: series
 

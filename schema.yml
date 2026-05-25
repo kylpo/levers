@@ -81,6 +81,16 @@ levers:
     values: [none, advisory, gates_merge]
     strictness: [gates_merge, advisory, none]
 
+  ci_retry:
+    scope: either
+    category: quality
+    values: [off, 1, 2, 3, until_fixed]
+    strictness: [off, 1, 2, 3, until_fixed]
+    depends_on:
+      key: ci_gate
+      enabled_when: [gates_merge]
+      disabled_default: off
+
   code_review:
     scope: either
     category: quality
