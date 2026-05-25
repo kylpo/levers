@@ -546,6 +546,36 @@ def _tui_edit(
     return changes
 
 
+def _set_preserving_schema_order(
+    data: dict, key: str, value, schema: Schema
+) -> None:
+    """Write `data[key] = value`, placing a brand-new key at its schema position.
+
+    Existing keys are updated in place (preserving any attached comments).
+    A new key is inserted right after the last data key that precedes it in
+    schema order — so a freshly-added lever lands next to its siblings instead
+    of trailing at the bottom of the file.
+    """
+    if key in data or key not in schema.levers:
+        data[key] = value
+        return
+    schema_keys = schema.keys()
+    preceding = set(schema_keys[: schema_keys.index(key)])
+    pos = 0
+    for i, k in enumerate(data.keys()):
+        if k in preceding:
+            pos = i + 1
+    insert = getattr(data, "insert", None)
+    if callable(insert):
+        insert(pos, key, value)
+    else:
+        items = list(data.items())
+        items.insert(pos, (key, value))
+        data.clear()
+        for k, v in items:
+            data[k] = v
+
+
 def _print_change_summary(
     target: Path,
     changes: list[tuple[str, Optional[str], str]],
@@ -1065,7 +1095,7 @@ def set_(
             typer.echo(f"ok: {target} (no changes)")
             return
         for k, _, new in changes:
-            data[k] = new
+            _set_preserving_schema_order(data, k, new, schema)
         dump_yaml(data, target)
         header = (
             f"ok: {target} — {len(changes)} change{'s' if len(changes) != 1 else ''}"
@@ -1090,7 +1120,7 @@ def set_(
 
     data = load_yaml(target)
     previous = data.get(key)
-    data[key] = coerced
+    _set_preserving_schema_order(data, key, coerced, schema)
     dump_yaml(data, target)
 
     if previous is None:
