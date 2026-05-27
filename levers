@@ -16,6 +16,7 @@ import json
 import os
 import re
 import select
+import shutil
 import subprocess
 import sys
 import termios
@@ -463,8 +464,12 @@ def _render(
     mode_current: Optional[str],
     mode_initial: Optional[str],
     modes_block: dict,
-) -> str:
-    """Build the full editor screen as a string. Pure."""
+) -> tuple[str, str]:
+    """Build the editor body and status-bar as two separate strings. Pure.
+
+    `_redraw` pins the status bar to the bottom of the terminal, so the body
+    and the status are emitted independently rather than concatenated.
+    """
     lines: list[str] = [_ansi(title, _C_BOLD, color), ""]
     overlay = _mode_overlay_for(modes_block, mode_current)
     for i, e in enumerate(entries):
@@ -514,8 +519,10 @@ def _render(
             lines.append(_ansi(row, _C_DIM, color))
         else:
             lines.append(f"{row_marker} {change_mark} {label} {strip}{suffix}")
-    lines.append("")
-    lines.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
+    body = "\n".join(lines)
+
+    status: list[str] = []
+    status.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
     if color:
         legend = (
             f"  {_C_FOCUS} focus {_C_RESET}{_C_DIM} saves on enter    {_C_RESET}"
@@ -525,13 +532,13 @@ def _render(
             legend += (
                 f"    {_C_OVERLAY} mode-overlay {_C_RESET}{_C_DIM} active mode masks this{_C_RESET}"
             )
-        lines.append(legend)
+        status.append(legend)
     else:
         legend = "  [focus] saves on enter    (anchor) restored on esc"
         if modes_block:
             legend += "    {overlay} mode-overlay"
-        lines.append(legend)
-    return "\n".join(lines)
+        status.append(legend)
+    return body, "\n".join(status)
 
 
 @contextlib.contextmanager
@@ -589,14 +596,29 @@ def _tui_edit(
     cancelled = False
 
     def _redraw() -> None:
-        sys.stdout.write("\x1b[H\x1b[2J")
-        sys.stdout.write(_render(
+        body, status = _render(
             title, entries, selected, current, snapshot, schema, color,
             mode_values=mode_values,
             mode_current=mode_current,
             mode_initial=mode_initial,
             modes_block=modes_block,
-        ))
+        )
+        size = shutil.get_terminal_size(fallback=(80, 24))
+        rows = size.lines
+        status_lines = status.split("\n")
+        status_height = len(status_lines)
+        body_lines = body.split("\n")
+        # Reserve the last `status_height` rows for the status bar; truncate
+        # the body if it would otherwise spill into them.
+        max_body = max(0, rows - status_height)
+        if len(body_lines) > max_body:
+            body_lines = body_lines[:max_body]
+        sys.stdout.write("\x1b[H\x1b[2J")
+        sys.stdout.write("\n".join(body_lines))
+        # Pin the status bar to the bottom of the terminal.
+        status_start = max(1, rows - status_height + 1)
+        for i, line in enumerate(status_lines):
+            sys.stdout.write(f"\x1b[{status_start + i};1H{line}")
         sys.stdout.flush()
 
     with _tty_session(fd):
