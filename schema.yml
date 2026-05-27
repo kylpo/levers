@@ -107,12 +107,12 @@ levers:
   manual_qa_capture:
     scope: package
     category: quality
-    values: [captured, not_captured]
-    strictness: [captured, not_captured]
+    values: [on, off]
+    strictness: [on, off]
     description: Whether manual QA sessions are recorded for future reference.
     value_descriptions:
-      captured: Manual QA results are written down (notes, screenshots, transcripts).
-      not_captured: Manual QA is done but not preserved.
+      on: Manual QA results are written down (notes, screenshots, transcripts).
+      off: Manual QA is done but not preserved.
 
   ci_gate:
     scope: either

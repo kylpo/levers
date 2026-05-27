@@ -90,7 +90,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | Key | Scope | Values |
 |---|---|---|
 | `test_strategy` | `either` | `coverage_delta` \| `test_after` \| `manual_only` |
-| `manual_qa_capture` | `package` | `captured` \| `not_captured` |
+| `manual_qa_capture` | `package` | `on` \| `off` |
 | `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
 | `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
 | `code_review` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
@@ -182,7 +182,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `ci_retry` | `off` → `1` → `2` → `3` → `until_fixed` |
 | `test_strategy` | `coverage_delta` → `test_after` → `manual_only` |
 | `lifecycle_stage` | `mature` → `post_launch` → `pre_launch` → `prototype` |
-| `manual_qa_capture` | `captured` → `not_captured` |
+| `manual_qa_capture` | `on` → `off` |
 | `release_model` | `release_branch` → `batched_timeline` → `batched_feature_scoped` → `continuous` |
 | `planning_horizon` | `big_bang` → `phased` → `just_in_time` |
 | `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |

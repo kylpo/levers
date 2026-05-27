@@ -11,7 +11,7 @@
 lifecycle_stage: pre_launch
 
 # --- Quality (package-scoped) ---
-manual_qa_capture: captured
+manual_qa_capture: on
 
 # --- Release & delivery (package-scoped) ---
 release_model: batched_feature_scoped

@@ -39,7 +39,7 @@ Use this document at the start of a project to justify the shape you land on, an
 | [4.4 Priority expression](#44-priority-expression) | **Manual / none:** someone chooses by hand | **Tag-based or ranked:** programmatic pickup order |
 | **5. Quality & verification** | | |
 | [5.1 Test strategy](#51-test-first-vs-test-after-vs-manual-only) | **TDD:** clear agent loop, less code exploration | **Test-after / manual:** faster iteration, weaker regression safety |
-| [5.2 Manual QA capture](#52-manual-qa-capture) | **Not captured:** flexible, tests lost between releases | **Accumulated log:** regression suite grows; preflight cost grows with it |
+| [5.2 Manual QA capture](#52-manual-qa-capture) | **Off:** flexible, tests lost between releases | **On (accumulated log):** regression suite grows; preflight cost grows with it |
 | [5.3 CI integration](#53-ci-integration) | **Local only:** fast merge, no multi-env coverage | **CI gates merges:** enforceable, adds latency floor to cycle time |
 | [5.4 Doc-sync enforcement](#54-pre-merge-doc-sync-enforcement) | **None:** fast; docs drift and get ignored | **Enforced (hook):** docs-as-SoT is real, not aspirational |
 | [5.5 Secrets / env](#55-environment--secrets-strategy) | **Committed (encrypted):** agents can run integration tests | **Human-hydrated:** secure; agents can't run integration tests |
@@ -445,11 +445,11 @@ Use this document at the start of a project to justify the shape you land on, an
 
 **The question:** do manual verification steps get recorded?
 
-**Not captured (QA happens ad-hoc, results lost).**
+**Off (QA happens ad-hoc, results lost).**
 - *Unlocks:* flexibility, no artifact.
 - *Closes:* a regression suite. Manual tests done for feature X aren't available next release.
 
-**Per-ticket captured + accumulated into a release-level regression log.**
+**On (per-ticket captured + accumulated into a release-level regression log).**
 - *Unlocks:* a growing manual-regression suite usable for release preflight.
 - *Closes:* zero-overhead shipping. Someone (or something) must run the suite before release.
 

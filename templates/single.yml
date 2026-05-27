@@ -15,7 +15,7 @@ modes:
     description: Throwaway / spike work — testing & review off.
     overrides:
       test_strategy: manual_only
-      manual_qa_capture: not_captured
+      manual_qa_capture: off
       ci_gate: none
       code_review: none
       doc_sync: none
@@ -53,7 +53,7 @@ planning_horizon: phased
 
 # --- Quality ---
 test_strategy: coverage_delta
-manual_qa_capture: captured
+manual_qa_capture: on
 ci_gate: none
 ci_retry: off
 code_review: none
