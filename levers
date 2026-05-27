@@ -247,7 +247,7 @@ def _coerce_value(raw: str, allowed: list):
 # POSIX-only via its `uv run --script` shebang, so no regression.
 #
 # Bindings: ↑/↓ select row, ←/→ cycle the selected lever's value through
-# its schema-declared enum (wrap-around), ENTER write, ESC (or Ctrl-C) cancel.
+# its schema-declared enum (wrap-around), ENTER write, ESC/q (or Ctrl-C) cancel.
 
 
 class _Key(Enum):
@@ -265,6 +265,8 @@ def _classify_byte(byte: int) -> _Key:
     if byte in (0x0a, 0x0d):
         return _Key.ENTER
     if byte == 0x03:  # Ctrl-C — treat as cancel
+        return _Key.ESC
+    if byte in (0x71, 0x51):  # q / Q — treat as cancel
         return _Key.ESC
     return _Key.OTHER
 
@@ -634,7 +636,7 @@ def _render(
     ])
 
     status: list[str] = []
-    status.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
+    status.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc/q cancel", _C_DIM, color))
     if color:
         legend = (
             f"  {_C_FOCUS} focus {_C_RESET}{_C_DIM} saves on enter    {_C_RESET}"
@@ -1690,7 +1692,7 @@ def init(
     """Create a new .levers.yml from a template.
 
     By default, opens an interactive editor seeded with the template's
-    default values: ↑/↓ select, ←/→ cycle values, ENTER save, ESC cancel.
+    default values: ↑/↓ select, ←/→ cycle values, ENTER save, ESC/q cancel.
     Pass --no-interactive (or pipe stdin) to write the template verbatim.
 
     For `--role package`, the target directory must be inside a git repo
