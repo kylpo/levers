@@ -17,6 +17,9 @@
 # multiple packages. Keys without a meaningful strictness ordering omit
 # the field; `merge-strictest` fails if asked to merge them across
 # packages with diverging values.
+#
+# Description / value_descriptions (optional): human-readable copy shown
+# in the TUI help block. Surfaced read-only; no validation impact.
 
 # Shape of a `modes:` entry in .levers.yml. Mode definitions themselves are
 # project-owned data, not built into the tool; this only describes the fields
@@ -50,17 +53,32 @@ levers:
     category: lifecycle
     values: [prototype, pre_launch, post_launch, mature]
     strictness: [mature, post_launch, pre_launch, prototype]
+    description: Where this package sits in its lifecycle. Strictness ramps up as it approaches mature.
+    value_descriptions:
+      prototype: Throwaway experimentation. Minimal guardrails; expect breakage.
+      pre_launch: Targeting a first release. Tightening up; some gates begin to apply.
+      post_launch: Live, but still iterating fast. Stricter gates; real users at risk.
+      mature: Stable, widely used. Strictest gates; changes carry the most weight.
 
   # --- Team & collaboration ---
   team_mode:
     scope: repo
     category: team
     values: [solo, small_team, large_team]
+    description: Size of the team working in this repo. Tunes how much explicit process is appropriate.
+    value_descriptions:
+      solo: One contributor. Minimal coordination overhead.
+      small_team: A handful of contributors who can keep shared state in their heads.
+      large_team: Many contributors; written-down process and conventions matter.
 
   review_cadence:
     scope: repo
     category: team
     values: [sync, async]
+    description: Whether reviewers respond in near-real-time or on their own schedule.
+    value_descriptions:
+      sync: Reviews happen interactively (pairs, huddles, fast turnarounds).
+      async: Reviewers respond when they can; expect hours-to-days latency.
 
   # --- Planning & execution ---
   planning_horizon:
@@ -68,6 +86,11 @@ levers:
     category: planning
     values: [big_bang, phased, just_in_time]
     strictness: [big_bang, phased, just_in_time]
+    description: How far ahead work is planned before execution begins.
+    value_descriptions:
+      big_bang: Whole project scoped up front, then executed end-to-end.
+      phased: Planned in phases; each phase is scoped before its work starts.
+      just_in_time: Minimal pre-planning; scope emerges as work proceeds.
 
   # --- Quality ---
   test_strategy:
@@ -75,18 +98,32 @@ levers:
     category: quality
     values: [coverage_delta, test_after, manual_only]
     strictness: [coverage_delta, test_after, manual_only]
+    description: How automated tests get written relative to the code they cover.
+    value_descriptions:
+      coverage_delta: Every change keeps or improves coverage; tests written alongside code.
+      test_after: Tests are added after the code lands, but they do get added.
+      manual_only: No automated tests; verification is manual.
 
   manual_qa_capture:
     scope: package
     category: quality
     values: [captured, not_captured]
     strictness: [captured, not_captured]
+    description: Whether manual QA sessions are recorded for future reference.
+    value_descriptions:
+      captured: Manual QA results are written down (notes, screenshots, transcripts).
+      not_captured: Manual QA is done but not preserved.
 
   ci_gate:
     scope: either
     category: quality
     values: [none, advisory, gates_merge]
     strictness: [gates_merge, advisory, none]
+    description: How CI failures affect merging.
+    value_descriptions:
+      none: No CI checks run on PRs.
+      advisory: CI runs and reports, but failures do not block merging.
+      gates_merge: Failing CI blocks merge.
 
   ci_retry:
     scope: either
@@ -97,18 +134,35 @@ levers:
       key: ci_gate
       enabled_when: [gates_merge]
       disabled_default: off
+    description: Auto-retry strategy for flaky CI runs. Only relevant when CI gates merging.
+    value_descriptions:
+      off: Failures stay failed; no retries.
+      1: Retry the failing job up to once before declaring failure.
+      2: Retry the failing job up to twice before declaring failure.
+      3: Retry the failing job up to three times before declaring failure.
+      until_fixed: Keep retrying until the run passes. Use sparingly — masks real flake.
 
   code_review:
     scope: either
     category: quality
     values: [none, inline, subagent, subagent_advisory]
     strictness: [subagent_advisory, subagent, inline, none]
+    description: Who reviews code before it can merge.
+    value_descriptions:
+      none: Author merges their own changes; no review step.
+      inline: A human reviews the PR before merge.
+      subagent: An AI subagent reviews and can block merge.
+      subagent_advisory: An AI subagent reviews; comments only, does not block.
 
   code_review_concurrency:
     scope: either
     category: quality
     values: [series, parallel]
     strictness: [series, parallel]
+    description: Whether review happens after authoring or alongside it.
+    value_descriptions:
+      series: Author finishes, then review begins.
+      parallel: Review runs alongside ongoing authoring on the same PR.
 
   # --- Release & delivery ---
   release_model:
@@ -116,27 +170,55 @@ levers:
     category: release
     values: [continuous, batched_timeline, batched_feature_scoped, release_branch]
     strictness: [release_branch, batched_timeline, batched_feature_scoped, continuous]
+    description: Granularity and discipline of releases for this package.
+    value_descriptions:
+      continuous: Every merge can ship; trunk is always releasable.
+      batched_timeline: Release on a fixed schedule, bundling whatever is ready.
+      batched_feature_scoped: Release when a defined set of features is ready.
+      release_branch: Cut a release branch, stabilize on it, ship from it.
 
   branch_strategy:
     scope: repo
     category: release
     values: [trunk_based, gitflow, feature_branches_plus_trunk]
+    description: Long-lived branch structure for the repo.
+    value_descriptions:
+      trunk_based: One main branch; short-lived feature branches merge back fast.
+      gitflow: Long-lived develop/main branches with release and hotfix branches.
+      feature_branches_plus_trunk: Trunk plus longer-lived feature branches that integrate periodically.
 
   release_cadence:
     scope: package
     category: release
     values: [on_demand, weekly, biweekly, monthly, milestone]
+    description: How often releases ship.
+    value_descriptions:
+      on_demand: Ship whenever something is ready.
+      weekly: Ship on a fixed weekly cadence.
+      biweekly: Ship on a fixed two-week cadence.
+      monthly: Ship on a fixed monthly cadence.
+      milestone: Ship when a milestone's scope is complete; no calendar cadence.
 
   versioning:
     scope: package
     category: release
     values: [semver, calver, adhoc]
+    description: Versioning scheme for releases.
+    value_descriptions:
+      semver: MAJOR.MINOR.PATCH; bumps follow semantic-versioning compatibility rules.
+      calver: Date-based version (e.g., 2026.05.26).
+      adhoc: No formal versioning scheme.
 
   pr_merge_method:
     scope: either
     category: release
     values: [merge, squash, rebase]
     strictness: [merge, rebase, squash]
+    description: How PRs land on the target branch.
+    value_descriptions:
+      merge: Merge commit preserves the full branch history.
+      squash: Collapse the PR to one commit on the target.
+      rebase: Replay the PR's commits onto the target; no merge commit.
 
   # --- Automation ---
   agent_auto_merge:
@@ -144,43 +226,79 @@ levers:
     category: automation
     values: [none, low_risk_only, all]
     strictness: [none, low_risk_only, all]
+    description: Whether agent-authored PRs may merge themselves.
+    value_descriptions:
+      none: Agents never auto-merge; a human always clicks merge.
+      low_risk_only: Agents may auto-merge low-risk changes (e.g., dep bumps, doc-only).
+      all: Agents auto-merge anything that passes gates.
 
   bug_intake:
     scope: repo
     category: automation
     values: [manual, funneled]
+    description: How user-reported bugs enter the work queue.
+    value_descriptions:
+      manual: Bugs land as ad-hoc messages or issues; no fixed intake path.
+      funneled: Bugs go through a defined intake (form, triage queue, etc.).
 
   ticket_claim:
     scope: either
     category: automation
     values: [comment, empty_pr]
+    description: How an agent signals it has started working on a ticket.
+    value_descriptions:
+      comment: Drop a claim comment on the ticket.
+      empty_pr: Open an empty PR linked to the ticket.
 
   agent_breadcrumb_commits:
     scope: either
     category: automation
     values: [off, on]
     strictness: [on, off]
+    description: Whether agents leave breadcrumb commits as they work.
+    value_descriptions:
+      off: Agents commit only meaningful diffs.
+      on: Agents commit progress markers — useful for resumability and review.
 
   agent_breadcrumb_comments:
     scope: either
     category: automation
     values: [off, on]
     strictness: [on, off]
+    description: Whether agents post status comments as they work.
+    value_descriptions:
+      off: Agents stay quiet on the PR until they are done.
+      on: Agents post progress comments — useful for observability.
 
   # --- Documentation ---
   changelog_style:
     scope: package
     category: documentation
     values: [commit_log, curated]
+    description: How the changelog is produced.
+    value_descriptions:
+      commit_log: The git log is the changelog; no curation step.
+      curated: A human curates a release-readable changelog.
 
   doc_sync:
     scope: either
     category: documentation
     values: [none, inline, subagent, subagent_advisory]
     strictness: [subagent_advisory, subagent, inline, none]
+    description: Who keeps documentation in sync with code changes.
+    value_descriptions:
+      none: Docs drift freely; nobody is responsible for keeping them current.
+      inline: Doc updates land in the same PR as the code change.
+      subagent: An AI subagent updates docs and can block merge if they drift.
+      subagent_advisory: An AI subagent flags doc drift; humans decide whether to act.
 
   # --- Workspace ---
   workspace_isolation:
     scope: repo
     category: workspace
     values: [worktree, branch, none]
+    description: How concurrent work-in-progress is isolated.
+    value_descriptions:
+      worktree: Each task runs in its own git worktree.
+      branch: Each task runs on its own branch in a shared checkout.
+      none: Everyone shares the same working tree.

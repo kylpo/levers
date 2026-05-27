@@ -115,6 +115,17 @@ class Schema:
     def depends_on(self, key: str) -> Optional[dict]:
         return self.levers[key].get("depends_on")
 
+    def description(self, key: str) -> Optional[str]:
+        return self.levers[key].get("description")
+
+    def value_description(self, key: str, value) -> Optional[str]:
+        vd = self.levers[key].get("value_descriptions") or {}
+        if value in vd:
+            return vd[value]
+        # YAML may parse `on`/`off` as bools and integer-shaped strings as ints;
+        # fall back to a string-keyed lookup so callers can pass either form.
+        return vd.get(str(value))
+
     def is_enabled(self, key: str, effective: dict) -> tuple[bool, Optional[str]]:
         """Resolve a lever's dependency-gated enabled state against `effective` values.
 
@@ -404,6 +415,93 @@ _C_FOCUS = "\x1b[7m"
 _C_OVERLAY = "\x1b[44m\x1b[97m"
 
 
+def _truncate(s: str, width: int) -> str:
+    """Shorten `s` to fit in `width` visible cells, adding an ellipsis. Pure.
+
+    Assumes `s` has no ANSI escapes (callers style after truncating).
+    """
+    if width <= 0:
+        return ""
+    if len(s) <= width:
+        return s
+    if width <= 1:
+        return s[:width]
+    return s[: width - 1] + "…"
+
+
+def _styled_help_line(
+    name: str, desc: str, name_code: str, budget: int, color: bool
+) -> str:
+    """Render `name: desc` with `name_code` ANSI applied to the name only. Pure.
+
+    Truncates against `budget` visible cells before styling so escapes don't
+    throw off width math. Falls back to styling everything if truncation
+    eats the `": "` separator.
+    """
+    plain = f"{name}: {desc}" if desc else name
+    plain = _truncate(plain, budget)
+    if not plain:
+        return ""
+    sep_idx = plain.find(": ")
+    if sep_idx == -1:
+        return "  " + _ansi(plain, name_code, color)
+    name_part = plain[:sep_idx]
+    rest = plain[sep_idx:]
+    return "  " + _ansi(name_part, name_code, color) + rest
+
+
+def _help_lines(
+    entries: list[_Entry],
+    selected: int,
+    current: dict[str, Optional[str]],
+    schema: Schema,
+    *,
+    mode_current: Optional[str],
+    modes_block: dict,
+    color: bool,
+    cols: int,
+) -> list[str]:
+    """Two-line help block for the focused entry: lever then highlighted value.
+
+    Lever / value names get bold styling (cyan for the lever, plain bold for
+    the value) so the block reads as foreground content next to the dim
+    legend. Always returns two lines so the layout reserves a fixed height.
+    Pure.
+    """
+    name1 = ""
+    desc1 = ""
+    name2 = ""
+    desc2 = ""
+    if 0 <= selected < len(entries):
+        e = entries[selected]
+        if e.kind == "mode":
+            name1 = "mode"
+            desc1 = "Overlay preset — temporarily masks levers without changing saved values."
+            if mode_current is None:
+                name2 = NO_MODE
+                desc2 = "No overlay active; saved values are in effect."
+            else:
+                entry = modes_block.get(mode_current) or {}
+                name2 = entry.get("label") or mode_current
+                desc2 = entry.get("description") or ""
+        elif e.kind == "row":
+            assert e.key is not None
+            name1 = e.key
+            desc1 = schema.description(e.key) or ""
+            cur = current.get(e.key)
+            if cur is None:
+                name2 = "—"
+                desc2 = "no value chosen yet"
+            else:
+                name2 = str(cur)
+                desc2 = schema.value_description(e.key, cur) or ""
+    budget = max(0, cols - 2)
+    return [
+        _styled_help_line(name1, desc1, _C_BOLD + _C_CYAN, budget, color),
+        _styled_help_line(name2, desc2, _C_BOLD, budget, color),
+    ]
+
+
 def _render_value_strip(
     values: list,
     anchor,
@@ -464,11 +562,13 @@ def _render(
     mode_current: Optional[str],
     mode_initial: Optional[str],
     modes_block: dict,
-) -> tuple[str, str]:
-    """Build the editor body and status-bar as two separate strings. Pure.
+    cols: int,
+) -> tuple[str, str, str]:
+    """Build the editor body, help, and status as three separate strings. Pure.
 
-    `_redraw` pins the status bar to the bottom of the terminal, so the body
-    and the status are emitted independently rather than concatenated.
+    `_redraw` renders body then help right under it (close to the focused
+    row) and pins the status bar to the bottom of the terminal — so the
+    three blocks are emitted independently rather than concatenated.
     """
     lines: list[str] = [_ansi(title, _C_BOLD, color), ""]
     overlay = _mode_overlay_for(modes_block, mode_current)
@@ -521,6 +621,18 @@ def _render(
             lines.append(f"{row_marker} {change_mark} {label} {strip}{suffix}")
     body = "\n".join(lines)
 
+    rule = "  " + _ansi("─" * max(0, cols - 4), _C_DIM, color)
+    help_block = "\n".join([
+        rule,
+        *_help_lines(
+            entries, selected, current, schema,
+            mode_current=mode_current,
+            modes_block=modes_block,
+            color=color,
+            cols=cols,
+        ),
+    ])
+
     status: list[str] = []
     status.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
     if color:
@@ -538,7 +650,7 @@ def _render(
         if modes_block:
             legend += "    {overlay} mode-overlay"
         status.append(legend)
-    return body, "\n".join(status)
+    return body, help_block, "\n".join(status)
 
 
 @contextlib.contextmanager
@@ -596,26 +708,32 @@ def _tui_edit(
     cancelled = False
 
     def _redraw() -> None:
-        body, status = _render(
+        size = shutil.get_terminal_size(fallback=(80, 24))
+        rows = size.lines
+        body, help_block, status = _render(
             title, entries, selected, current, snapshot, schema, color,
             mode_values=mode_values,
             mode_current=mode_current,
             mode_initial=mode_initial,
             modes_block=modes_block,
+            cols=size.columns,
         )
-        size = shutil.get_terminal_size(fallback=(80, 24))
-        rows = size.lines
         status_lines = status.split("\n")
         status_height = len(status_lines)
+        help_lines = help_block.split("\n") if help_block else []
+        # Help renders right after the body (one blank line separator), so
+        # the eye finds it next to the focused row rather than at the very
+        # bottom. Status stays pinned to the bottom of the terminal.
+        help_reserve = (len(help_lines) + 1) if help_lines else 0
         body_lines = body.split("\n")
-        # Reserve the last `status_height` rows for the status bar; truncate
-        # the body if it would otherwise spill into them.
-        max_body = max(0, rows - status_height)
+        max_body = max(0, rows - status_height - help_reserve)
         if len(body_lines) > max_body:
             body_lines = body_lines[:max_body]
         sys.stdout.write("\x1b[H\x1b[2J")
-        sys.stdout.write("\n".join(body_lines))
-        # Pin the status bar to the bottom of the terminal.
+        top = "\n".join(body_lines)
+        if help_lines:
+            top += "\n\n" + "\n".join(help_lines)
+        sys.stdout.write(top)
         status_start = max(1, rows - status_height + 1)
         for i, line in enumerate(status_lines):
             sys.stdout.write(f"\x1b[{status_start + i};1H{line}")
