@@ -18,6 +18,13 @@
 # the field; `merge-strictest` fails if asked to merge them across
 # packages with diverging values.
 
+# Shape of a `modes:` entry in .levers.yml. Mode definitions themselves are
+# project-owned data, not built into the tool; this only describes the fields
+# `levers validate` will check.
+mode_schema:
+  required: [overrides]
+  optional: [label, description]
+
 categories:
   lifecycle:
     label: Lifecycle & risk

@@ -5,6 +5,42 @@
 #                  pipeline reshape. Pair every flip with a DEC-P record
 #                  in docs/DECISIONS.md.
 
+# Active mode — temporary overlay on the declared values below. Empty = no mode.
+# See `modes:` for definitions; flip with `levers mode set/clear` or via the TUI.
+mode:
+
+modes:
+  prototype:
+    label: Prototype
+    description: Throwaway / spike work — testing & review off.
+    overrides:
+      test_strategy: manual_only
+      manual_qa_capture: not_captured
+      ci_gate: none
+      code_review: none
+      doc_sync: none
+      agent_auto_merge: all
+      planning_horizon: just_in_time
+
+  greenfield:
+    label: Greenfield
+    description: Net-new code, low ceremony, tests on, fast iteration.
+    overrides:
+      ci_gate: advisory
+      code_review: inline
+      doc_sync: inline
+      planning_horizon: just_in_time
+
+  brownfield:
+    label: Brownfield
+    description: Touching legacy code — full gates and reviews.
+    overrides:
+      ci_gate: gates_merge
+      ci_retry: 1
+      code_review: subagent
+      doc_sync: subagent
+      planning_horizon: phased
+
 # --- Lifecycle & risk ---
 lifecycle_stage: pre_launch
 

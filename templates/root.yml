@@ -10,6 +10,42 @@
 # packages/*/.levers.yml etc. declare PACKAGE-SCOPED keys. EITHER-SCOPED
 # keys default here and may be overridden per-package.
 
+# Active mode — temporary overlay on the declared values below. Empty = no mode.
+# Modes are root-only (no `mode:` / `modes:` in package files).
+# Flip with `levers mode set/clear` or via the TUI.
+mode:
+
+modes:
+  prototype:
+    label: Prototype
+    description: Throwaway / spike work — testing & review off.
+    overrides:
+      test_strategy: manual_only
+      ci_gate: none
+      code_review: none
+      doc_sync: none
+      agent_auto_merge: all
+      planning_horizon: just_in_time
+
+  greenfield:
+    label: Greenfield
+    description: Net-new code, low ceremony, tests on, fast iteration.
+    overrides:
+      ci_gate: advisory
+      code_review: inline
+      doc_sync: inline
+      planning_horizon: just_in_time
+
+  brownfield:
+    label: Brownfield
+    description: Touching legacy code — full gates and reviews.
+    overrides:
+      ci_gate: gates_merge
+      ci_retry: 1
+      code_review: subagent
+      doc_sync: subagent
+      planning_horizon: phased
+
 # --- Team & collaboration (repo-scoped) ---
 team_mode: solo
 review_cadence: async

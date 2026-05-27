@@ -42,6 +42,14 @@ TEMPLATES_DIR = REPO_ROOT / "templates"
 
 DEFAULT_FILENAME = ".levers.yml"
 
+# Reserved top-level keys in .levers.yml that aren't lever entries. The
+# validator skips them in lever checks; the resolver strips them before emit.
+RESERVED_KEYS = frozenset({"mode", "modes"})
+
+# Synthesized "no mode" entry used in TUI cycling and the bare `levers mode`
+# output. Never stored.
+NO_MODE = "(none)"
+
 # ---------------------------------------------------------------------------
 # YAML loader (shared)
 # ---------------------------------------------------------------------------
@@ -81,6 +89,12 @@ class Schema:
         raw = load_yaml(path)
         self.categories: dict = raw["categories"]
         self.levers: dict = raw["levers"]
+        ms = raw.get("mode_schema") or {}
+        self.mode_required: list[str] = list(ms.get("required") or ["overrides"])
+        self.mode_optional: list[str] = list(ms.get("optional") or ["label", "description"])
+
+    def mode_allowed_fields(self) -> set[str]:
+        return set(self.mode_required) | set(self.mode_optional)
 
     def keys(self) -> list[str]:
         return list(self.levers.keys())
@@ -314,20 +328,30 @@ def _allowed_scopes(role: Role) -> set[str]:
 
 
 class _Entry:
-    """One row in the editor — either a category header or a lever row."""
+    """One row in the editor — category header, lever row, or mode strip."""
 
     __slots__ = ("kind", "label", "key")
 
     def __init__(self, kind: str, label: str, key: Optional[str] = None) -> None:
-        self.kind = kind  # "header" | "row"
+        self.kind = kind  # "header" | "row" | "mode"
         self.label = label
         self.key = key
 
 
-def _build_entries(schema: Schema, role: Role) -> list[_Entry]:
-    """Walk schema in category order, emitting header + row entries for `role`."""
+_SELECTABLE_KINDS = {"row", "mode"}
+
+
+def _build_entries(
+    schema: Schema, role: Role, *, include_mode_row: bool
+) -> list[_Entry]:
+    """Walk schema in category order, emitting header + row entries for `role`.
+
+    Prepends a `mode` entry when `include_mode_row` (modes are root-only).
+    """
     allowed = _allowed_scopes(role)
     out: list[_Entry] = []
+    if include_mode_row:
+        out.append(_Entry("mode", "Mode"))
     for cat_id, keys in schema.keys_by_category().items():
         keys = [k for k in keys if schema.scope(k) in allowed]
         if not keys:
@@ -340,7 +364,7 @@ def _build_entries(schema: Schema, role: Role) -> list[_Entry]:
 
 def _first_row(entries: list[_Entry]) -> int:
     for i, e in enumerate(entries):
-        if e.kind == "row":
+        if e.kind in _SELECTABLE_KINDS:
             return i
     return 0
 
@@ -353,7 +377,7 @@ def _next_row(entries: list[_Entry], idx: int, direction: int) -> int:
     i = idx
     for _ in range(n):
         i = (i + direction) % n
-        if entries[i].kind == "row":
+        if entries[i].kind in _SELECTABLE_KINDS:
             return i
     return idx
 
@@ -375,6 +399,8 @@ _C_RESET = "\x1b[0m"
 _C_ANCHOR = "\x1b[100m\x1b[97m"
 # Focus highlight: reverse video — prominent, signals "cursor position".
 _C_FOCUS = "\x1b[7m"
+# Overlay highlight: blue bg + bright white fg — signals "mode is masking this".
+_C_OVERLAY = "\x1b[44m\x1b[97m"
 
 
 def _render_value_strip(
@@ -383,15 +409,17 @@ def _render_value_strip(
     focus,
     color: bool,
     enabled: bool = True,
+    overlay=None,
 ) -> str:
     """Render one row's enum as a horizontal strip with anchor + focus highlights.
 
     `anchor` is what survives ESC (the file's saved value, may be None for
     unset rows). `focus` is where ←/→ currently sits (saves on ENTER, may
-    be None for an unset+untouched row). When the two coincide, focus wins.
-    When `enabled` is False, suppress focus highlighting (the row can't be
-    edited) and show the anchor in parentheses so the saved value is still
-    visible. Pure.
+    be None for an unset+untouched row). `overlay` (optional) marks the value
+    a mode is currently masking onto this lever — wins over anchor when
+    distinct from focus. When the two coincide, focus wins. When `enabled` is
+    False, suppress focus highlighting (the row can't be edited) and show the
+    anchor in parentheses so the saved value is still visible. Pure.
     """
     cells: list[str] = []
     for v in values:
@@ -400,6 +428,10 @@ def _render_value_strip(
             cells.append(f"{_C_FOCUS} {s} {_C_RESET}")
         elif enabled and v == focus:
             cells.append(f"[{s}]")
+        elif overlay is not None and v == overlay and color:
+            cells.append(f"{_C_OVERLAY} {s} {_C_RESET}")
+        elif overlay is not None and v == overlay:
+            cells.append(f"<{s}>")
         elif v == anchor and color:
             cells.append(f"{_C_ANCHOR} {s} {_C_RESET}")
         elif v == anchor:
@@ -407,6 +439,15 @@ def _render_value_strip(
         else:
             cells.append(f" {s} ")
     return " ".join(cells)
+
+
+def _mode_overlay_for(
+    modes_block: dict, active_mode: Optional[str]
+) -> dict[str, object]:
+    """Return the override dict for `active_mode`, or {} when none."""
+    if not active_mode or active_mode not in (modes_block or {}):
+        return {}
+    return ((modes_block[active_mode] or {}).get("overrides") or {})
 
 
 def _render(
@@ -417,13 +458,34 @@ def _render(
     initial: dict[str, Optional[str]],
     schema: Schema,
     color: bool,
+    *,
+    mode_values: list[Optional[str]],
+    mode_current: Optional[str],
+    mode_initial: Optional[str],
+    modes_block: dict,
 ) -> str:
     """Build the full editor screen as a string. Pure."""
     lines: list[str] = [_ansi(title, _C_BOLD, color), ""]
+    overlay = _mode_overlay_for(modes_block, mode_current)
     for i, e in enumerate(entries):
         if e.kind == "header":
             lines.append("")
             lines.append(_ansi(f"  {e.label}", _C_DIM, color))
+            continue
+        if e.kind == "mode":
+            is_focus = i == selected
+            row_marker = _ansi("►", _C_CYAN, color) if is_focus else " "
+            is_changed = mode_current != mode_initial
+            change_mark = _ansi("*", _C_YELLOW, color) if is_changed else " "
+            label = "mode".ljust(22)
+            display = [v or NO_MODE for v in mode_values]
+            anchor_disp = mode_initial or NO_MODE
+            focus_disp = mode_current or NO_MODE
+            strip = _render_value_strip(
+                display, anchor=anchor_disp, focus=focus_disp, color=color, enabled=is_focus or True
+            )
+            lines.append(f"{row_marker} {change_mark} {label} {strip}")
+            lines.append("")
             continue
         key = e.key  # type: ignore[assignment]
         assert key is not None
@@ -435,23 +497,40 @@ def _render(
         row_marker = _ansi("►", _C_CYAN, color) if is_row_focus else " "
         change_mark = _ansi("*", _C_YELLOW, color) if is_changed else " "
         label = key.ljust(22)
+        overlay_val = overlay.get(key) if enabled else None
         strip = _render_value_strip(
-            schema.values_for(key), anchor=init, focus=cur, color=color, enabled=enabled
+            schema.values_for(key),
+            anchor=init,
+            focus=cur,
+            color=color,
+            enabled=enabled,
+            overlay=overlay_val,
         )
+        suffix = ""
+        if overlay_val is not None:
+            suffix = _ansi(f"  (mode: {mode_current})", _C_DIM, color)
         if not enabled:
             row = f"{row_marker}   {label} {strip}    {reason}"
             lines.append(_ansi(row, _C_DIM, color))
         else:
-            lines.append(f"{row_marker} {change_mark} {label} {strip}")
+            lines.append(f"{row_marker} {change_mark} {label} {strip}{suffix}")
     lines.append("")
     lines.append(_ansi("  ↑↓ row   ←→ value   ⏎ save   esc cancel", _C_DIM, color))
     if color:
-        lines.append(
+        legend = (
             f"  {_C_FOCUS} focus {_C_RESET}{_C_DIM} saves on enter    {_C_RESET}"
             f"{_C_ANCHOR} anchor {_C_RESET}{_C_DIM} restored on esc{_C_RESET}"
         )
+        if modes_block:
+            legend += (
+                f"    {_C_OVERLAY} mode-overlay {_C_RESET}{_C_DIM} active mode masks this{_C_RESET}"
+            )
+        lines.append(legend)
     else:
-        lines.append("  [focus] saves on enter    (anchor) restored on esc")
+        legend = "  [focus] saves on enter    (anchor) restored on esc"
+        if modes_block:
+            legend += "    {overlay} mode-overlay"
+        lines.append(legend)
     return "\n".join(lines)
 
 
@@ -476,14 +555,17 @@ def _tui_edit(
     schema: Schema,
     role: Role,
     initial: dict,
-) -> Optional[list[tuple[str, Optional[str], str]]]:
+) -> Optional[list[tuple[str, Optional[str], Optional[str]]]]:
     """Run the interactive editor.
 
     Returns None on cancel, or a list of (key, old_value, new_value) changes
     on save. `old_value` is None for keys that weren't declared in `initial`.
+    The `mode` key may appear in changes with `new_value=None` to clear it.
     """
-    entries = _build_entries(schema, role)
-    if not any(e.kind == "row" for e in entries):
+    modes_block: dict = initial.get("modes") or {}
+    include_mode_row = bool(modes_block) and role in (Role.root, Role.single)
+    entries = _build_entries(schema, role, include_mode_row=include_mode_row)
+    if not any(e.kind in _SELECTABLE_KINDS for e in entries):
         return []
 
     current: dict[str, Optional[str]] = {}
@@ -494,6 +576,13 @@ def _tui_edit(
             current[e.key] = initial.get(e.key)
             snapshot[e.key] = initial.get(e.key)
 
+    mode_initial: Optional[str] = initial.get("mode") or None
+    if include_mode_row and mode_initial is not None and mode_initial not in modes_block:
+        # Stale `mode:` value — drop it from the strip so the user can re-pick.
+        mode_initial = None
+    mode_current: Optional[str] = mode_initial
+    mode_values: list[Optional[str]] = [None, *modes_block.keys()] if include_mode_row else []
+
     selected = _first_row(entries)
     fd = sys.stdin.fileno()
     color = _supports_color()
@@ -501,7 +590,13 @@ def _tui_edit(
 
     def _redraw() -> None:
         sys.stdout.write("\x1b[H\x1b[2J")
-        sys.stdout.write(_render(title, entries, selected, current, snapshot, schema, color))
+        sys.stdout.write(_render(
+            title, entries, selected, current, snapshot, schema, color,
+            mode_values=mode_values,
+            mode_current=mode_current,
+            mode_initial=mode_initial,
+            modes_block=modes_block,
+        ))
         sys.stdout.flush()
 
     with _tty_session(fd):
@@ -520,12 +615,15 @@ def _tui_edit(
                     selected = _next_row(entries, selected, +1)
                 elif key in (_Key.LEFT, _Key.RIGHT):
                     e = entries[selected]
-                    if e.kind == "row":
+                    direction = -1 if key is _Key.LEFT else +1
+                    if e.kind == "mode" and mode_values:
+                        idx = mode_values.index(mode_current) if mode_current in mode_values else 0
+                        mode_current = mode_values[(idx + direction) % len(mode_values)]
+                    elif e.kind == "row":
                         assert e.key is not None
                         enabled, _reason = schema.is_enabled(e.key, current)
                         if enabled:
                             values = schema.values_for(e.key)
-                            direction = -1 if key is _Key.LEFT else +1
                             current[e.key] = _advance(values, current[e.key], direction)
                 else:
                     continue
@@ -536,7 +634,9 @@ def _tui_edit(
     if cancelled:
         return None
 
-    changes: list[tuple[str, Optional[str], str]] = []
+    changes: list[tuple[str, Optional[str], Optional[str]]] = []
+    if include_mode_row and mode_current != mode_initial:
+        changes.append(("mode", mode_initial, mode_current))
     for k, v in current.items():
         if v is None:
             continue
@@ -578,13 +678,15 @@ def _set_preserving_schema_order(
 
 def _print_change_summary(
     target: Path,
-    changes: list[tuple[str, Optional[str], str]],
+    changes: list[tuple[str, Optional[str], Optional[str]]],
     header: str,
 ) -> None:
     typer.echo(header)
     for k, old, new in changes:
-        if old is None:
+        if old is None and new is not None:
             typer.echo(f"  {k}: (added) {new}")
+        elif new is None:
+            typer.echo(f"  {k}: {old or '(none)'} → (none)")
         else:
             typer.echo(f"  {k}: {old} → {new}")
 
@@ -625,6 +727,56 @@ def main(
 # ---------------------------------------------------------------------------
 
 
+def _validate_modes_block(data: dict, schema: Schema) -> list[str]:
+    """Validate the `mode:` and `modes:` reserved keys at root/single role."""
+    errors: list[str] = []
+    modes = data.get("modes")
+    if modes is not None and not isinstance(modes, dict):
+        errors.append("modes: must be a mapping of mode-name → definition")
+        modes = None
+
+    if modes:
+        allowed_fields = schema.mode_allowed_fields()
+        for name, defn in modes.items():
+            ctx = f"modes.{name}"
+            if not isinstance(defn, dict):
+                errors.append(f"{ctx}: must be a mapping")
+                continue
+            for req in schema.mode_required:
+                if req not in defn:
+                    errors.append(f"{ctx}: missing required field {req!r}")
+            extras = set(defn) - allowed_fields
+            for extra in sorted(extras):
+                errors.append(f"{ctx}: unknown field {extra!r}")
+            overrides = defn.get("overrides") or {}
+            if not isinstance(overrides, dict):
+                errors.append(f"{ctx}.overrides: must be a mapping")
+                continue
+            for ok, ov in overrides.items():
+                if ok in RESERVED_KEYS:
+                    errors.append(f"{ctx}.overrides.{ok}: cannot override reserved key")
+                    continue
+                if ok not in schema.levers:
+                    errors.append(f"{ctx}.overrides.{ok}: unknown lever key")
+                    continue
+                allowed_vals = schema.values_for(ok)
+                if ov not in allowed_vals:
+                    errors.append(
+                        f"{ctx}.overrides.{ok}: invalid value {ov!r} — "
+                        f"allowed: {_fmt_values(allowed_vals)}"
+                    )
+
+    active = data.get("mode")
+    if active is not None and active != "":
+        if not isinstance(active, str):
+            errors.append(f"mode: must be a string or null (got {type(active).__name__})")
+        elif not modes or active not in modes:
+            defined = sorted((modes or {}).keys())
+            hint = _fmt_values(defined) if defined else "(no modes defined)"
+            errors.append(f"mode: {active!r} is not defined in `modes:` — defined: {hint}")
+    return errors
+
+
 def _validate_one(target: Path, role: Role, schema: Schema) -> bool:
     """Validate one .levers.yml file. Prints result. Returns True iff valid."""
     if not target.exists():
@@ -641,7 +793,7 @@ def _validate_one(target: Path, role: Role, schema: Schema) -> bool:
 
     errors: list[str] = []
 
-    unknown = set(data) - set(schema.levers)
+    unknown = set(data) - set(schema.levers) - RESERVED_KEYS
     for key in sorted(unknown):
         errors.append(f"unknown key: {key}")
 
@@ -662,6 +814,15 @@ def _validate_one(target: Path, role: Role, schema: Schema) -> bool:
             errors.append(
                 f"{key}: invalid value {value!r} — allowed: {_fmt_values(allowed)}"
             )
+
+    # `mode` / `modes` are root-only reserved keys. Reject at package files;
+    # validate shape + cross-refs at root/single.
+    if role is Role.package:
+        for k in ("mode", "modes"):
+            if k in data:
+                errors.append(f"{k}: root-only, not allowed in role={role.value}")
+    else:
+        errors.extend(_validate_modes_block(data, schema))
 
     if errors:
         plural = "s" if len(errors) != 1 else ""
@@ -891,14 +1052,59 @@ def _apply_disabled_defaults(data: dict, schema: Schema) -> dict:
     return out
 
 
+def _apply_mode_overlay(
+    data: dict, root_data: dict, mode_override: Optional[str] = None
+) -> tuple[dict, Optional[str], dict]:
+    """Apply the active mode's overrides to `data`. Pure-ish.
+
+    `root_data` is the un-modified root file (the source of `mode:` and
+    `modes:`). `mode_override` lets callers force a specific mode (or "" for
+    none) regardless of what's in the file — used by `--no-mode` and the TUI
+    live-preview.
+
+    Returns (merged, active_mode_name_or_None, overrides_applied).
+    """
+    modes_block = root_data.get("modes") or {}
+    if mode_override is not None:
+        active = mode_override or None
+    else:
+        active = root_data.get("mode") or None
+    if not active or active not in modes_block:
+        return data, None, {}
+    overrides = (modes_block[active] or {}).get("overrides") or {}
+    if not overrides:
+        return data, active, {}
+    out = dict(data)
+    applied: dict = {}
+    for k, v in overrides.items():
+        if k in RESERVED_KEYS:
+            continue
+        out[k] = v
+        applied[k] = v
+    return out, active, applied
+
+
+def _strip_reserved(data: dict) -> dict:
+    return {k: v for k, v in data.items() if k not in RESERVED_KEYS}
+
+
 def _resolve_one(
     target: Path,
     repo_root_override: Optional[Path],
     schema: Optional[Schema] = None,
+    *,
+    no_mode: bool = False,
 ) -> dict:
     """Compute the effective .levers.yml view for a single path.
 
-    Returns: {"data": merged_dict, "root_file": Path, "pkg_file": Path | None}
+    Returns: {
+        "data": merged_dict,                # reserved keys stripped
+        "root_file": Path,
+        "pkg_file": Path | None,
+        "active_mode": str | None,          # resolved active mode (None if none/--no-mode)
+        "mode_overrides": dict,             # {lever: overlay_value} actually applied
+        "pre_overlay": dict,                # merged view BEFORE overlay (for provenance)
+    }
     Applies `disabled_default` overrides when `schema` is provided.
     """
     if repo_root_override is not None:
@@ -933,10 +1139,26 @@ def _resolve_one(
         pkg_file = None
         merged = dict(root_data)
 
-    if schema is not None:
-        merged = _apply_disabled_defaults(merged, schema)
+    pre_overlay = _strip_reserved(merged)
+    if no_mode:
+        active_mode, overrides_applied = None, {}
+        post_overlay = pre_overlay
+    else:
+        post_overlay, active_mode, overrides_applied = _apply_mode_overlay(
+            pre_overlay, root_data
+        )
 
-    return {"data": merged, "root_file": root_file, "pkg_file": pkg_file}
+    if schema is not None:
+        post_overlay = _apply_disabled_defaults(post_overlay, schema)
+
+    return {
+        "data": post_overlay,
+        "root_file": root_file,
+        "pkg_file": pkg_file,
+        "active_mode": active_mode,
+        "mode_overrides": overrides_applied,
+        "pre_overlay": pre_overlay,
+    }
 
 
 def _narrow(data: dict, keys: list[str]) -> dict:
@@ -995,6 +1217,11 @@ def get(
         "--repo-root",
         help="Override the repo root (defaults to walking up to .git).",
     ),
+    no_mode: bool = typer.Option(
+        False,
+        "--no-mode",
+        help="Bypass the active-mode overlay; show declared values only.",
+    ),
 ) -> None:
     """Read effective lever values at a path (root + nearest-ancestor package, merged).
 
@@ -1016,11 +1243,13 @@ def get(
 
     target = at if at is not None else Path.cwd()
     try:
-        r = _resolve_one(target, repo_root, schema)
+        r = _resolve_one(target, repo_root, schema, no_mode=no_mode)
     except ResolveError as exc:
         raise typer.Exit(_die(str(exc), code=1))
 
     data = r["data"]
+    overrides = r["mode_overrides"]
+    active = r["active_mode"]
 
     if key is not None:
         if key not in data:
@@ -1028,6 +1257,13 @@ def get(
                 _die(f"{key} is not declared in the effective view for {target}", code=1)
             )
         typer.echo(data[key])
+        if key in overrides:
+            declared = r["pre_overlay"].get(key, "(unset)")
+            if declared != data[key]:
+                typer.echo(
+                    f"note: {key}={data[key]} from mode {active!r} (declared: {declared})",
+                    err=True,
+                )
         return
 
     out = _narrow(data, key_filter) if key_filter else data
@@ -1035,12 +1271,20 @@ def get(
         f"# Package: {r['pkg_file']}" if r["pkg_file"] is not None
         else "# Package: (none — single-repo or no nearest-ancestor package file)"
     )
+    if no_mode:
+        mode_line = "# Mode: (bypassed via --no-mode)"
+    elif active is None:
+        mode_line = "# Mode: (none)"
+    else:
+        n = len(overrides)
+        mode_line = f"# Mode: {active} (overrides {n} key{'s' if n != 1 else ''})"
     keys_label = ",".join(key_filter) if key_filter else "(all)"
     header = [
         "---",
         f"# Synthesized by `levers get` for {target}",
         f"# Root: {r['root_file']}",
         pkg_line,
+        mode_line,
         f"# Keys: {keys_label}",
     ]
     _emit(out, fmt, header)
@@ -1129,6 +1373,146 @@ def set_(
         typer.echo(f"ok: {target} {key} = {coerced} (unchanged)")
     else:
         typer.echo(f"ok: {target} {key}: {previous} → {coerced}")
+
+
+# ---------------------------------------------------------------------------
+# mode
+# ---------------------------------------------------------------------------
+
+mode_app = typer.Typer(
+    name="mode",
+    help="Manage the active mode overlay on .levers.yml.",
+    no_args_is_help=False,
+    invoke_without_command=True,
+)
+app.add_typer(mode_app, name="mode")
+
+
+def _root_levers_file(repo_root_override: Optional[Path]) -> Path:
+    """Locate the repo-root .levers.yml. Errors via Exit on failure."""
+    if repo_root_override is not None:
+        repo_root = repo_root_override.resolve()
+    else:
+        found = _find_repo_root(Path.cwd().resolve())
+        if found is None:
+            raise typer.Exit(
+                _die("not inside a git repository — pass --repo-root to locate .levers.yml", code=1)
+            )
+        repo_root = found
+    target = repo_root / DEFAULT_FILENAME
+    if not target.is_file():
+        raise typer.Exit(_die(f"{target} not found — run `levers init` first", code=1))
+    return target
+
+
+def _write_active_mode(target: Path, new_value: Optional[str]) -> Optional[str]:
+    """Write `mode: <new_value>` (or `mode:` for None) to `target`.
+
+    Returns the previous value. Comments preserved by ruamel roundtrip.
+    """
+    data = load_yaml(target)
+    previous = data.get("mode") or None
+    if new_value is None:
+        # ruamel preserves a bare-null mapping value as an empty entry.
+        data["mode"] = None
+    else:
+        data["mode"] = new_value
+    # Anchor `mode` at the top so a freshly-added key lands above other levers.
+    if "mode" in data:
+        items = list(data.items())
+        items = [("mode", data["mode"])] + [(k, v) for k, v in items if k != "mode"]
+        data.clear()
+        for k, v in items:
+            data[k] = v
+    dump_yaml(data, target)
+    return previous
+
+
+_REPO_ROOT_OPT = typer.Option(
+    None,
+    "--repo-root",
+    help="Override the repo root (defaults to walking up to .git).",
+)
+
+
+@mode_app.callback(invoke_without_command=True)
+def mode_root(
+    ctx: typer.Context,
+    repo_root: Optional[Path] = _REPO_ROOT_OPT,
+) -> None:
+    """Show the active mode and its overrides (when no subcommand is given)."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    target = _root_levers_file(repo_root)
+    data = load_yaml(target)
+    active = data.get("mode") or None
+    modes = data.get("modes") or {}
+    if active is None:
+        typer.echo("active: (none)")
+        if modes:
+            typer.echo(f"available: {', '.join(modes.keys())}")
+        return
+    if active not in modes:
+        typer.echo(f"active: {active}  ⚠ not defined in `modes:`")
+        return
+
+    overrides = (modes[active] or {}).get("overrides") or {}
+    typer.echo(f"active: {active}")
+    n = len(overrides)
+    typer.echo(f"overrides ({n}):")
+    for k, v in overrides.items():
+        declared = data.get(k, "(unset)")
+        typer.echo(f"  {k}: {declared} → {v}")
+
+
+@mode_app.command("set")
+def mode_set(
+    name: str = typer.Argument(..., help="Mode name (must exist in `modes:` block)."),
+    repo_root: Optional[Path] = _REPO_ROOT_OPT,
+) -> None:
+    """Activate a mode by writing `mode: <name>` to the root .levers.yml."""
+    target = _root_levers_file(repo_root)
+    data = load_yaml(target)
+    modes = data.get("modes") or {}
+    if name not in modes:
+        defined = ", ".join(sorted(modes.keys())) or "(none defined)"
+        raise typer.Exit(
+            _die(f"no mode named {name!r} in {target} — defined: {defined}", code=1)
+        )
+    previous = _write_active_mode(target, name)
+    typer.echo(f"ok: {target} mode: {previous or '(none)'} → {name}")
+
+
+@mode_app.command("clear")
+def mode_clear(
+    repo_root: Optional[Path] = _REPO_ROOT_OPT,
+) -> None:
+    """Clear the active mode (writes `mode:` with no value)."""
+    target = _root_levers_file(repo_root)
+    previous = _write_active_mode(target, None)
+    typer.echo(f"ok: {target} mode: {previous or '(none)'} → (none)")
+
+
+@mode_app.command("list")
+def mode_list(
+    repo_root: Optional[Path] = _REPO_ROOT_OPT,
+) -> None:
+    """List modes defined in the root .levers.yml."""
+    target = _root_levers_file(repo_root)
+    data = load_yaml(target)
+    modes = data.get("modes") or {}
+    if not modes:
+        typer.echo("(no modes defined in this project)")
+        typer.echo(f"see {TEMPLATES_DIR / 'single.yml'} for a default block to copy in")
+        return
+    active = data.get("mode") or None
+    for name, defn in modes.items():
+        marker = "*" if name == active else " "
+        defn = defn or {}
+        desc = defn.get("description") or defn.get("label") or ""
+        suffix = f" — {desc}" if desc else ""
+        typer.echo(f"  {marker} {name}{suffix}")
 
 
 # ---------------------------------------------------------------------------

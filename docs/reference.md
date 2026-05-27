@@ -5,6 +5,8 @@ A reference for shaping a product-development pipeline. Each lever is a design c
 Use this document at the start of a project to justify the shape you land on, and later to diagnose why the pipeline feels wrong. Most pipeline pain comes from one of two sources: a lever set the wrong way for the actual context, or two levers that disagree with each other (e.g., "continuous delivery" + "async human review" — the combination is contradictory).
 
 > **Where these levers get encoded.** The subset of levers that actually routes tool behavior is captured per-project in `.levers.yml` — see [`spec.md`](./spec.md) for the format. This document is the *tradeoff rationale* for every lever; `.levers.yml` is the *current value* for the levers a project declares. Observable levers (greenfield/brownfield, contributor count) stay inferred by the consumers that care and are not encoded in `.levers.yml`.
+>
+> **Temporary deviations: modes.** Need to flip a cluster of these levers for a throwaway spike or a touchy legacy refactor? `.levers.yml` supports named overlays — see the [Modes section in spec.md](./spec.md#modes). The seeded `prototype` / `greenfield` / `brownfield` modes are project-owned data; edit, rename, or replace as needed.
 
 ---
 

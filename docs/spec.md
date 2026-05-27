@@ -158,7 +158,8 @@ Which:
 1. Loads the root `.levers.yml`.
 2. Finds the nearest-ancestor package `.levers.yml` (stopping at repo root; excluding root itself).
 3. Merges: start with root; overlay package. `either` values override; `package` keys live only in the package file; `repo` keys only at root.
-4. Narrows to the requested key list (if any) and emits YAML or a single raw value.
+4. Overlays the active **mode** (if any — see [Modes](#modes)).
+5. Narrows to the requested key list (if any) and emits YAML or a single raw value.
 
 Consumers never traverse or merge themselves. The key list passed to `levers get` serves as an auditable declaration of which levers drive the consumer's behavior.
 
@@ -192,6 +193,72 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 Levers not in the table (e.g., `versioning`, `release_cadence`) are not meaningfully comparable for strictness — `levers merge-strictest` fails with an error if asked to merge them across packages with diverging values, forcing the human to pick or split.
 
 When all paths agree on a value, the strictness check is bypassed even for levers without a strictness order.
+
+## Modes
+
+A **mode** is a named, temporary overlay on `.levers.yml`. Activating one shifts the values `levers get` returns without editing the underlying lever lines; clearing it restores the declared truth. Use case: flip into `prototype` for a throwaway spike, then clear when done.
+
+### Storage
+
+Two reserved top-level keys in the root `.levers.yml`:
+
+```yaml
+# .levers.yml
+mode: prototype          # active mode name, empty/absent = no mode
+
+modes:                   # mode definitions (project-owned data)
+  prototype:
+    label: Prototype
+    description: Throwaway / spike work — testing & review off.
+    overrides:
+      ci_gate: none
+      code_review: none
+      doc_sync: none
+      # ...
+
+# ...declared lever values follow, as usual...
+lifecycle_stage: pre_launch
+```
+
+Both keys are **root-only** — declaring them in a per-package `.levers.yml` fails validation. (Modes are a session-wide overlay; a per-package mode would create resolution ambiguity.) The flat-value rule for lever entries still applies; `mode:` and `modes:` are reserved schema-level blocks, not lever values.
+
+### Built-in vs project-owned
+
+There is no built-in mode registry. Modes are project data: `levers init` seeds `prototype` / `greenfield` / `brownfield` into the new file, and from that point on the project owns the block — rename, edit, delete, or add modes freely. The tool only validates *shape*:
+
+- Required fields: `overrides`.
+- Optional fields: `label`, `description`. Unknown fields are validation errors.
+- Every override key must be a known non-reserved lever; every override value must be in that lever's enum.
+
+Source of truth for the shape lives in [`schema.yml`](../schema.yml) under `mode_schema:`.
+
+### Resolution
+
+`levers get` applies the overlay between the package merge and the disabled-default pass: root → package → **mode overlay** → `disabled_defaults`. The reserved `mode:` / `modes:` keys are stripped from the emitted view (they're plumbing, not levers). The provenance header gains a `# Mode:` line; `--no-mode` bypasses the overlay for inspection.
+
+For the single-value form, `levers get <key>` emits a one-line **stderr** note when a mode is masking the declared value (so piped stdout stays clean):
+
+```bash
+$ levers get ci_gate
+none
+note: ci_gate=none from mode 'prototype' (declared: gates_merge)
+```
+
+### CLI
+
+```bash
+levers mode                       # show active mode + overrides applied
+levers mode set <name>            # activate (writes `mode:` to root)
+levers mode clear                 # deactivate (writes `mode:` empty)
+levers mode list                  # enumerate modes defined in this project
+levers get [...] --no-mode        # bypass the overlay
+```
+
+`levers set` (no args, interactive TUI) gains a mode row at the top of the editor; ←/→ cycles through `(none)` plus each defined mode; affected lever rows show the overlay value live as you cycle.
+
+### Migration
+
+Projects predating modes won't have a `modes:` block. Copy the default block from [`templates/single.yml`](../templates/single.yml) (or [`templates/root.yml`](../templates/root.yml) for monorepo root files) into your `.levers.yml`. There is no automated migration command.
 
 ## Templates
 
@@ -246,6 +313,10 @@ The self-consistency guarantee — every value emitted for every key validates u
 ---
 
 ## FAQ
+
+### Why does the active mode live in `.levers.yml` instead of a sidecar file?
+
+Two reasons. **Single source of truth** — every per-project knob this tool reads lives in one file, which keeps the discovery story (one file, one schema, one validator) clean. **Visibility** — a mode flip is a normal git-tracked diff, which is exactly the same surface that lifts mode policy out of "invisible local state" and into "we deliberately are in prototype mode right now." A `~/.leversrc`-style user-global file was considered and rejected for the inverse reason: it would silently let one teammate's checkout behave differently from another's, which is precisely the failure mode `.levers.yml` exists to prevent.
 
 ### Why a separate `.levers.yml` instead of folding into `CLAUDE.md`?
 
