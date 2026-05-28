@@ -91,7 +91,7 @@ The lever set is small (~17 keys) and chosen to cover policy that **can't be rel
 - **Lifecycle & risk** — `lifecycle_stage`
 - **Team & collaboration** — `team_mode`, `review_cadence`
 - **Planning & execution** — `planning_horizon`
-- **Quality** — `test_strategy`, `manual_qa_capture`, `ci_gate`, `code_review`
+- **Quality** — `test_automation`, `test_coverage`, `verification_strategy`, `manual_qa_capture`, `ci_gate`, `code_review`
 - **Release & delivery** — `release_model`, `branch_strategy`, `release_cadence`, `versioning`
 - **Automation** — `agent_auto_merge`, `bug_intake`
 - **Documentation** — `changelog_style`, `doc_sync`

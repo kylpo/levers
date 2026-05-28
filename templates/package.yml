@@ -22,7 +22,9 @@ versioning: semver
 changelog_style: curated
 
 # --- Either-scoped overrides (optional — uncomment and set to override root) ---
-# test_strategy: coverage_delta
+# test_automation: on
+# test_coverage: on
+# verification_strategy: per_feature
 # ci_gate: none
 # ci_retry: off
 # code_review: none

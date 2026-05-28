@@ -93,16 +93,41 @@ levers:
       just_in_time: Minimal pre-planning; scope emerges as work proceeds.
 
   # --- Quality ---
-  test_strategy:
+  test_automation:
     scope: either
     category: quality
-    values: [coverage_delta, test_after, manual_only]
-    strictness: [coverage_delta, test_after, manual_only]
-    description: How automated tests get written relative to the code they cover.
+    values: [off, on]
+    strictness: [on, off]
+    description: Whether changes are covered by automated tests.
     value_descriptions:
-      coverage_delta: Every change keeps or improves coverage; tests written alongside code.
-      test_after: Tests are added after the code lands, but they do get added.
-      manual_only: No automated tests; verification is manual.
+      off: No automated tests; verification is manual.
+      on: Changes ship with automated tests.
+
+  test_coverage:
+    scope: either
+    category: quality
+    values: [off, on]
+    strictness: [on, off]
+    depends_on:
+      key: test_automation
+      enabled_when: [on]
+      disabled_default: off
+    description: Whether coverage is tracked and defended on each change. Only relevant when tests are automated.
+    value_descriptions:
+      off: Coverage is not tracked; tests exist but the bar is "they pass."
+      on: Every change keeps or improves coverage; regressions block merge.
+
+  verification_strategy:
+    scope: either
+    category: quality
+    values: [none, per_ticket, per_feature, per_epic]
+    strictness: [per_ticket, per_feature, per_epic, none]
+    description: At what granularity human verification happens before work is considered done.
+    value_descriptions:
+      none: No explicit verification step; work is done when the code lands.
+      per_ticket: Every ticket is verified before it closes.
+      per_feature: Verification happens once per feature, after its tickets land.
+      per_epic: Verification happens once per epic, after its features land.
 
   manual_qa_capture:
     scope: package

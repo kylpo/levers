@@ -14,7 +14,9 @@ modes:
     label: Prototype
     description: Throwaway / spike work — testing & review off.
     overrides:
-      test_strategy: manual_only
+      test_automation: off
+      test_coverage: off
+      verification_strategy: none
       manual_qa_capture: off
       ci_gate: none
       code_review: none
@@ -26,6 +28,9 @@ modes:
     label: Greenfield
     description: Net-new code, low ceremony, tests on, fast iteration.
     overrides:
+      test_automation: on
+      test_coverage: off
+      verification_strategy: per_feature
       ci_gate: advisory
       code_review: inline
       doc_sync: inline
@@ -35,6 +40,9 @@ modes:
     label: Brownfield
     description: Touching legacy code — full gates and reviews.
     overrides:
+      test_automation: on
+      test_coverage: on
+      verification_strategy: per_ticket
       ci_gate: gates_merge
       ci_retry: 1
       code_review: subagent
@@ -52,7 +60,9 @@ review_cadence: async
 planning_horizon: phased
 
 # --- Quality ---
-test_strategy: coverage_delta
+test_automation: on
+test_coverage: on
+verification_strategy: per_feature
 manual_qa_capture: on
 ci_gate: none
 ci_retry: off
