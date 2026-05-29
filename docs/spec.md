@@ -66,68 +66,71 @@ Every lever has a **scope** attribute — one of `repo`, `package`, or `either`:
 
 See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
-### Lifecycle & risk
+### Project context
 
 | Key | Scope | Values |
 |---|---|---|
 | `lifecycle_stage` | `package` | `prototype` \| `pre_launch` \| `post_launch` \| `mature` |
-
-### Team & collaboration
-
-| Key | Scope | Values |
-|---|---|---|
 | `team_mode` | `repo` | `solo` \| `small_team` \| `large_team` |
 | `review_cadence` | `repo` | `sync` \| `async` |
 
-### Planning & execution
+### Planning & intake
 
 | Key | Scope | Values |
 |---|---|---|
 | `planning_horizon` | `either` | `big_bang` \| `phased` \| `just_in_time` |
+| `bug_intake` | `repo` | `manual` \| `funneled` |
 
-### Quality
+### Testing & QA
 
 | Key | Scope | Values |
 |---|---|---|
 | `test_automation` | `either` | `off` \| `on` |
 | `test_coverage` | `either` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
 | `verification_strategy` | `either` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
-| `manual_qa_capture` | `package` | `on` \| `off` |
-| `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
-| `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
-| `code_review` | `either` | `none` \| `advisory` \| `apply` |
-| `code_review_concurrency` | `either` | `series` \| `parallel` |
-
-### Release & delivery
-
-| Key | Scope | Values |
-|---|---|---|
-| `release_model` | `package` | `continuous` \| `batched_timeline` \| `batched_feature_scoped` \| `release_branch` |
-| `branch_strategy` | `repo` | `trunk_based` \| `gitflow` \| `feature_branches_plus_trunk` |
-| `release_cadence` | `package` | `on_demand` \| `weekly` \| `biweekly` \| `monthly` \| `milestone` |
-| `versioning` | `package` | `semver` \| `calver` \| `adhoc` |
+| `manual_qa_capture` | `package` | `off` \| `on` |
 
 ### Automation
 
 | Key | Scope | Values |
 |---|---|---|
-| `agent_auto_merge` | `either` | `off` \| `low_risk_only` \| `on` |
-| `bug_intake` | `repo` | `manual` \| `funneled` |
+| `code_review` | `either` | `none` \| `advisory` \| `apply` |
+| `code_review_concurrency` | `either` | `series` \| `parallel` |
+| `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
+| `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
+
+### Version control & PRs
+
+| Key | Scope | Values |
+|---|---|---|
+| `branch_strategy` | `repo` | `trunk_based` \| `gitflow` \| `feature_branches_plus_trunk` |
+| `pr_merge_method` | `either` | `merge` \| `squash` \| `rebase` |
+| `risk_classification` | `either` | `off` \| `on` |
+| `ticket_claim` | `either` | `comment` \| `empty_pr` |
+| `workspace_isolation` | `repo` | `worktree` \| `branch` \| `none` |
+
+### Release & versioning
+
+| Key | Scope | Values |
+|---|---|---|
+| `release_model` | `package` | `continuous` \| `batched_timeline` \| `batched_feature_scoped` \| `release_branch` |
+| `release_cadence` | `package` | `on_demand` \| `weekly` \| `biweekly` \| `monthly` \| `milestone` |
+| `versioning` | `package` | `semver` \| `calver` \| `adhoc` |
+| `changelog_style` | `package` | `commit_log` \| `curated` |
+
+### Agent behavior
+
+| Key | Scope | Values |
+|---|---|---|
 | `agent_breadcrumb_commits` | `either` | `off` \| `on` |
 | `agent_breadcrumb_comments` | `either` | `off` \| `on` |
+| `agent_auto_merge` | `either` | `off` \| `low_risk_only` \| `on` |
 
 ### Documentation
 
 | Key | Scope | Values |
 |---|---|---|
-| `changelog_style` | `package` | `commit_log` \| `curated` |
 | `doc_sync` | `either` | `none` \| `advisory` \| `apply` |
-
-### Workspace
-
-| Key | Scope | Values |
-|---|---|---|
-| `workspace_isolation` | `repo` | `worktree` \| `branch` \| `none` |
 
 ### Scope summary
 
@@ -135,7 +138,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|
 | `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `manual_qa_capture`, `changelog_style` |
-| `either` | `test_automation`, `test_coverage`, `verification_strategy`, `ci_gate`, `ci_retry`, `agent_auto_merge`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `planning_horizon`, `doc_sync`, `code_review`, `code_review_concurrency` |
+| `either` | `planning_horizon`, `test_automation`, `test_coverage`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
 
 ## Monorepo layout
 

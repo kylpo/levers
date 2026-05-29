@@ -54,35 +54,36 @@ modes:
       doc_sync: apply
       planning_horizon: phased
 
-# --- Team & collaboration (repo-scoped) ---
+# --- Project context (repo-scoped) ---
 team_mode: solo
 review_cadence: async
 
-# --- Planning & execution (either-scoped default) ---
-planning_horizon: phased
+# --- Planning & intake ---
+planning_horizon: phased          # either-scoped default
+bug_intake: manual                # repo-scoped
 
-# --- Quality (either-scoped defaults) ---
+# --- Testing & QA (either-scoped defaults) ---
 test_automation: on
 test_coverage: on
 verification_strategy: per_feature
-ci_gate: none
-ci_retry: off
+
+# --- Automation (either-scoped defaults) ---
 code_review: none
 code_review_concurrency: series
+ci_gate: none
+ci_retry: off
 
-# --- Release & delivery ---
-branch_strategy: trunk_based     # repo-scoped
-pr_merge_method: merge           # either-scoped default
-
-# --- Automation ---
-agent_auto_merge: low_risk_only   # either-scoped default
-bug_intake: manual                # repo-scoped
+# --- Version control & PRs ---
+branch_strategy: trunk_based      # repo-scoped
+pr_merge_method: merge            # either-scoped default
+risk_classification: off          # either-scoped default
 ticket_claim: comment             # either-scoped default
-agent_breadcrumb_commits: off     # either-scoped default
-agent_breadcrumb_comments: off    # either-scoped default
+workspace_isolation: branch       # repo-scoped
+
+# --- Agent behavior (either-scoped defaults) ---
+agent_breadcrumb_commits: off
+agent_breadcrumb_comments: off
+agent_auto_merge: low_risk_only
 
 # --- Documentation (either-scoped default) ---
 doc_sync: advisory
-
-# --- Workspace (repo-scoped) ---
-workspace_isolation: branch

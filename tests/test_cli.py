@@ -187,7 +187,7 @@ def test_set_preserves_comments(run, single_repo: Path) -> None:
     run("set", "ci_gate", "gates_merge", cwd=single_repo).assert_ok()
     text = (single_repo / ".levers.yml").read_text()
     assert "# .levers.yml" in text
-    assert "# --- Lifecycle & risk ---" in text
+    assert "# --- Project context ---" in text
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ def test_set_only_key_arg_errors(run, single_repo: Path) -> None:
 def test_list_enums_default(run) -> None:
     r = run("list-enums").assert_ok()
     assert "ci_gate" in r.stdout
-    assert "Lifecycle & risk" in r.stdout
+    assert "Project context" in r.stdout
 
 
 def test_list_enums_key(run) -> None:

@@ -86,16 +86,16 @@ Full mechanics in [docs/spec.md](./docs/spec.md).
 
 ## Concepts
 
-The lever set is small (~17 keys) and chosen to cover policy that **can't be reliably inferred from the repo**. Each key has a strict enum of allowed values, a *scope* (`repo`, `package`, or `either`), and for the values that admit a "strictest" answer, a strictness ordering used for cross-package merges.
+The lever set is small (~22 keys) and chosen to cover policy that **can't be reliably inferred from the repo**. Each key has a strict enum of allowed values, a *scope* (`repo`, `package`, or `either`), and for the values that admit a "strictest" answer, a strictness ordering used for cross-package merges.
 
-- **Lifecycle & risk** — `lifecycle_stage`
-- **Team & collaboration** — `team_mode`, `review_cadence`
-- **Planning & execution** — `planning_horizon`
-- **Quality** — `test_automation`, `test_coverage`, `verification_strategy`, `manual_qa_capture`, `ci_gate`, `code_review`
-- **Release & delivery** — `release_model`, `branch_strategy`, `release_cadence`, `versioning`
-- **Automation** — `agent_auto_merge`, `bug_intake`
-- **Documentation** — `changelog_style`, `doc_sync`
-- **Workspace** — `workspace_isolation`
+- **Project context** — `lifecycle_stage`, `team_mode`, `review_cadence`
+- **Planning & intake** — `planning_horizon`, `bug_intake`
+- **Testing & QA** — `test_automation`, `test_coverage`, `verification_strategy`, `manual_qa_capture`
+- **Automation** — `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`
+- **Version control & PRs** — `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`
+- **Release & versioning** — `release_model`, `release_cadence`, `versioning`, `changelog_style`
+- **Agent behavior** — `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`
+- **Documentation** — `doc_sync`
 
 Schema tables with every enum value: [docs/spec.md § Schema](./docs/spec.md#schema). The full tradeoff space behind each lever (when to pick which value, and why): [docs/reference.md](./docs/reference.md).
 

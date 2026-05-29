@@ -119,11 +119,11 @@ def _swap_modes_block(target: Path, replacement: str) -> None:
     """Replace the seeded `modes:` block in `target` with `replacement`.
 
     Relies on the template layout: `modes:` block starts at a line beginning
-    with `modes:` and ends at the blank line before `# --- Lifecycle & risk ---`.
+    with `modes:` and ends at the blank line before `# --- Project context ---`.
     """
     lines = target.read_text().splitlines(keepends=True)
     start = next(i for i, ln in enumerate(lines) if ln.startswith("modes:"))
-    end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("# --- Lifecycle"))
+    end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("# --- Project context"))
     new_lines = lines[:start] + [replacement.rstrip() + "\n\n"] + lines[end:]
     target.write_text("".join(new_lines))
 

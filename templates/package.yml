@@ -7,31 +7,31 @@
 # REPO-SCOPED keys (team_mode, branch_strategy, etc.) live at the root
 # and must NOT appear here.
 
-# --- Lifecycle & risk (package-scoped) ---
+# --- Project context (package-scoped) ---
 lifecycle_stage: pre_launch
 
-# --- Quality (package-scoped) ---
+# --- Testing & QA (package-scoped) ---
 manual_qa_capture: on
 
-# --- Release & delivery (package-scoped) ---
+# --- Release & versioning (package-scoped) ---
 release_model: batched_feature_scoped
 release_cadence: on_demand
 versioning: semver
-
-# --- Documentation (package-scoped) ---
 changelog_style: curated
 
 # --- Either-scoped overrides (optional — uncomment and set to override root) ---
+# planning_horizon: phased
 # test_automation: on
 # test_coverage: on
 # verification_strategy: per_feature
-# ci_gate: none
-# ci_retry: off
 # code_review: none
 # code_review_concurrency: series
-# agent_auto_merge: low_risk_only
+# ci_gate: none
+# ci_retry: off
+# pr_merge_method: merge
+# risk_classification: off
+# ticket_claim: comment
 # agent_breadcrumb_commits: off
 # agent_breadcrumb_comments: off
-# planning_horizon: phased
+# agent_auto_merge: low_risk_only
 # doc_sync: advisory
-# pr_merge_method: merge
