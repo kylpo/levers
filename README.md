@@ -63,7 +63,7 @@ The interactive editor (`levers init`, `levers set` with no args) binds: ↑/↓
 
 ## Monorepos
 
-A monorepo has a root `.levers.yml` plus one `.levers.yml` per package. Repo-wide levers (`team_mode`, `branch_strategy`) live at root; package-scoped levers (`lifecycle_stage`, `release_model`) live in each package. "Either" levers default at root and may be overridden per-package.
+A monorepo has a root `.levers.yml` plus one `.levers.yml` per package. Every operational lever is repo-wide and lives at root (`team_mode`, `branch_strategy`, `ci_gate`, …); only package-scoped levers (`lifecycle_stage`, `release_model`) live in each package. (The `either` scope — a root default with optional per-package override — is still supported but currently unused.)
 
 ```bash
 levers init --role root                       # root file (repo-wide policy)

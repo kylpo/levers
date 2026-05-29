@@ -81,7 +81,7 @@ levers:
 
   # --- Planning & intake ---
   planning_horizon:
-    scope: either
+    scope: repo
     category: planning
     values: [big_bang, phased, just_in_time]
     strictness: [big_bang, phased, just_in_time]
@@ -102,7 +102,7 @@ levers:
 
   # --- Testing & QA ---
   test_automation:
-    scope: either
+    scope: repo
     category: testing
     values: [off, on]
     strictness: [on, off]
@@ -112,7 +112,7 @@ levers:
       on: Changes ship with automated tests.
 
   test_coverage:
-    scope: either
+    scope: repo
     category: testing
     values: [off, on]
     strictness: [on, off]
@@ -126,7 +126,7 @@ levers:
       on: Every change keeps or improves coverage; regressions block merge.
 
   manual_qa_capture:
-    scope: either
+    scope: repo
     category: testing
     values: [off, on]
     strictness: [on, off]
@@ -136,7 +136,7 @@ levers:
       on: Manual QA results are written down (notes, screenshots, transcripts).
 
   verification_strategy:
-    scope: either
+    scope: repo
     category: testing
     values: [none, per_ticket, per_feature, per_epic]
     strictness: [per_ticket, per_feature, per_epic, none]
@@ -149,7 +149,7 @@ levers:
 
   # --- Automation ---
   code_review:
-    scope: either
+    scope: repo
     category: automation
     values: [none, advisory, apply]
     strictness: [apply, advisory, none]
@@ -160,7 +160,7 @@ levers:
       apply: Changes are reviewed and fixes are applied directly; review can block merge.
 
   code_review_concurrency:
-    scope: either
+    scope: repo
     category: automation
     values: [series, parallel]
     strictness: [series, parallel]
@@ -170,7 +170,7 @@ levers:
       parallel: Review runs alongside ongoing authoring on the same PR.
 
   ci_gate:
-    scope: either
+    scope: repo
     category: automation
     values: [none, advisory, gates_merge]
     strictness: [gates_merge, advisory, none]
@@ -181,7 +181,7 @@ levers:
       gates_merge: Failing CI blocks merge.
 
   ci_retry:
-    scope: either
+    scope: repo
     category: automation
     values: [off, 1, 2, 3, until_fixed]
     strictness: [off, 1, 2, 3, until_fixed]
@@ -209,7 +209,7 @@ levers:
       feature_branches_plus_trunk: Trunk plus longer-lived feature branches that integrate periodically.
 
   pr_merge_method:
-    scope: either
+    scope: repo
     category: vcs
     values: [merge, squash, rebase]
     strictness: [merge, rebase, squash]
@@ -220,7 +220,7 @@ levers:
       rebase: Replay the PR's commits onto the target; no merge commit.
 
   risk_classification:
-    scope: either
+    scope: repo
     category: vcs
     values: [off, on]
     strictness: [on, off]
@@ -230,7 +230,7 @@ levers:
       on: Each change is analyzed and tagged low-risk or high-risk.
 
   ticket_claim:
-    scope: either
+    scope: repo
     category: vcs
     values: [comment, empty_pr]
     description: How an agent signals it has started working on a ticket.
@@ -294,7 +294,7 @@ levers:
 
   # --- Agent behavior ---
   agent_breadcrumb_commits:
-    scope: either
+    scope: repo
     category: agent
     values: [off, on]
     strictness: [on, off]
@@ -304,7 +304,7 @@ levers:
       on: Agents commit progress markers — useful for resumability and review.
 
   agent_breadcrumb_comments:
-    scope: either
+    scope: repo
     category: agent
     values: [off, on]
     strictness: [on, off]
@@ -314,7 +314,7 @@ levers:
       on: Agents post progress comments — useful for observability.
 
   agent_auto_merge:
-    scope: either
+    scope: repo
     category: agent
     values: [off, low_risk_only, on]
     strictness: [off, low_risk_only, on]
@@ -326,7 +326,7 @@ levers:
 
   # --- Documentation ---
   doc_sync:
-    scope: either
+    scope: repo
     category: documentation
     values: [none, advisory, apply]
     strictness: [apply, advisory, none]

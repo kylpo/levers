@@ -230,14 +230,14 @@ def test_list_enums_default(run) -> None:
 
 def test_list_enums_key(run) -> None:
     r = run("list-enums", "--key", "ci_gate").assert_ok()
-    assert r.stdout.strip() == "ci_gate (either): none | advisory | gates_merge"
+    assert r.stdout.strip() == "ci_gate (repo): none | advisory | gates_merge"
 
 
 def test_list_enums_role_filter(run) -> None:
     r = run("list-enums", "--role", "root").assert_ok()
     # Package-only keys must not appear.
     assert "lifecycle_stage" not in r.stdout
-    # Repo / either keys must appear.
+    # Repo-scoped keys must appear.
     assert "team_mode" in r.stdout
     assert "ci_gate" in r.stdout
 
@@ -250,7 +250,7 @@ def test_list_enums_format_yaml(run) -> None:
 def test_list_enums_shows_numeric_values(run) -> None:
     r = run("list-enums", "--key", "ci_retry").assert_ok()
     assert r.stdout.splitlines()[0] == (
-        "ci_retry (either): off | 1 | 2 | 3 | until_fixed"
+        "ci_retry (repo): off | 1 | 2 | 3 | until_fixed"
     )
 
 

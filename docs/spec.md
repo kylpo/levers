@@ -62,7 +62,7 @@ Every lever has a **scope** attribute — one of `repo`, `package`, or `either`:
 
 - **`repo`** — declared only at the root `.levers.yml`. These describe how humans and tools operate on the whole repo (team shape, collaboration rules, branch model). Declaring a `repo`-scoped key at a package fails validation.
 - **`package`** — declared only at per-package `.levers.yml` files in monorepos. These describe properties that vary per deliverable (lifecycle stage, release model, versioning). Declaring a `package`-scoped key at root fails validation. In a single-repo setup, the repo *is* the only package, and `package`-scoped keys are declared at the root file (validated under `--role single`).
-- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. Useful for levers that often apply repo-wide but sometimes need local override (test strategy, QA discipline, CI gate, auto-merge, design discipline).
+- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. A supported scope for levers that often apply repo-wide but sometimes need local override. **No lever currently uses `either`** — per-package overrides were judged not worth the overhead, so every operational lever is `repo`-scoped. The mechanism remains available for reintroducing an overridable lever later.
 
 See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
@@ -78,35 +78,35 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Key | Scope | Values |
 |---|---|---|
-| `planning_horizon` | `either` | `big_bang` \| `phased` \| `just_in_time` |
+| `planning_horizon` | `repo` | `big_bang` \| `phased` \| `just_in_time` |
 | `bug_intake` | `repo` | `manual` \| `funneled` |
 
 ### Testing & QA
 
 | Key | Scope | Values |
 |---|---|---|
-| `test_automation` | `either` | `off` \| `on` |
-| `test_coverage` | `either` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
-| `manual_qa_capture` | `either` | `off` \| `on` |
-| `verification_strategy` | `either` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
+| `test_automation` | `repo` | `off` \| `on` |
+| `test_coverage` | `repo` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
+| `manual_qa_capture` | `repo` | `off` \| `on` |
+| `verification_strategy` | `repo` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
 
 ### Automation
 
 | Key | Scope | Values |
 |---|---|---|
-| `code_review` | `either` | `none` \| `advisory` \| `apply` |
-| `code_review_concurrency` | `either` | `series` \| `parallel` |
-| `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
-| `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
+| `code_review` | `repo` | `none` \| `advisory` \| `apply` |
+| `code_review_concurrency` | `repo` | `series` \| `parallel` |
+| `ci_gate` | `repo` | `none` \| `advisory` \| `gates_merge` |
+| `ci_retry` | `repo` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
 
 ### Version control & PRs
 
 | Key | Scope | Values |
 |---|---|---|
 | `branch_strategy` | `repo` | `trunk_based` \| `gitflow` \| `feature_branches_plus_trunk` |
-| `pr_merge_method` | `either` | `merge` \| `squash` \| `rebase` |
-| `risk_classification` | `either` | `off` \| `on` |
-| `ticket_claim` | `either` | `comment` \| `empty_pr` |
+| `pr_merge_method` | `repo` | `merge` \| `squash` \| `rebase` |
+| `risk_classification` | `repo` | `off` \| `on` |
+| `ticket_claim` | `repo` | `comment` \| `empty_pr` |
 | `workspace_isolation` | `repo` | `worktree` \| `branch` \| `none` |
 
 ### Release & versioning
@@ -122,23 +122,23 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Key | Scope | Values |
 |---|---|---|
-| `agent_breadcrumb_commits` | `either` | `off` \| `on` |
-| `agent_breadcrumb_comments` | `either` | `off` \| `on` |
-| `agent_auto_merge` | `either` | `off` \| `low_risk_only` \| `on` |
+| `agent_breadcrumb_commits` | `repo` | `off` \| `on` |
+| `agent_breadcrumb_comments` | `repo` | `off` \| `on` |
+| `agent_auto_merge` | `repo` | `off` \| `low_risk_only` \| `on` |
 
 ### Documentation
 
 | Key | Scope | Values |
 |---|---|---|
-| `doc_sync` | `either` | `none` \| `advisory` \| `apply` |
+| `doc_sync` | `repo` | `none` \| `advisory` \| `apply` |
 
 ### Scope summary
 
 | Scope | Keys |
 |---|---|
-| `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
+| `repo` | `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
-| `either` | `planning_horizon`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
+| `either` | _(none — supported but unused; see scope notes above)_ |
 
 ## Monorepo layout
 
@@ -272,8 +272,8 @@ Projects predating modes won't have a `modes:` block. Copy the default block fro
 Three starters depending on the repo shape:
 
 - [`templates/single.yml`](../templates/single.yml) — **single-repo projects.** All keys in one file. `levers init` (default `--role single`) copies this.
-- [`templates/root.yml`](../templates/root.yml) — **monorepo root.** `repo` + `either` keys. `levers init --role root` copies this.
-- [`templates/package.yml`](../templates/package.yml) — **per-package in a monorepo.** `package` keys (required) + commented-out `either` overrides. `levers init --role package --at <path>` copies this once per detected package.
+- [`templates/root.yml`](../templates/root.yml) — **monorepo root.** All `repo` keys (every operational lever). `levers init --role root` copies this.
+- [`templates/package.yml`](../templates/package.yml) — **per-package in a monorepo.** `package` keys only (lifecycle, release, versioning). `levers init --role package --at <path>` copies this once per detected package.
 
 ## Drift detection
 

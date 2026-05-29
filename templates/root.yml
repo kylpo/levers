@@ -6,9 +6,9 @@
 #                  in the appropriate DECISIONS.md.
 #
 # This file declares REPO-SCOPED keys (how humans/agents operate on the
-# whole repo). Per-package .levers.yml files at apps/*/.levers.yml,
-# packages/*/.levers.yml etc. declare PACKAGE-SCOPED keys. EITHER-SCOPED
-# keys default here and may be overridden per-package.
+# whole repo) — every operational lever lives here. Per-package
+# .levers.yml files at apps/*/.levers.yml, packages/*/.levers.yml etc.
+# declare only PACKAGE-SCOPED keys (lifecycle, release, versioning).
 
 # Active mode — temporary overlay on the declared values below. Empty = no mode.
 # Modes are root-only (no `mode:` / `modes:` in package files).
@@ -60,32 +60,32 @@ team_mode: solo
 review_cadence: async
 
 # --- Planning & intake ---
-planning_horizon: phased          # either-scoped default
-bug_intake: manual                # repo-scoped
+planning_horizon: phased
+bug_intake: manual
 
-# --- Testing & QA (either-scoped defaults) ---
+# --- Testing & QA ---
 test_automation: on
 test_coverage: on
 manual_qa_capture: on
 verification_strategy: per_feature
 
-# --- Automation (either-scoped defaults) ---
+# --- Automation ---
 code_review: none
 code_review_concurrency: series
 ci_gate: none
 ci_retry: off
 
 # --- Version control & PRs ---
-branch_strategy: trunk_based      # repo-scoped
-pr_merge_method: merge            # either-scoped default
-risk_classification: off          # either-scoped default
-ticket_claim: comment             # either-scoped default
-workspace_isolation: branch       # repo-scoped
+branch_strategy: trunk_based
+pr_merge_method: merge
+risk_classification: off
+ticket_claim: comment
+workspace_isolation: branch
 
-# --- Agent behavior (either-scoped defaults) ---
+# --- Agent behavior ---
 agent_breadcrumb_commits: off
 agent_breadcrumb_comments: off
 agent_auto_merge: low_risk_only
 
-# --- Documentation (either-scoped default) ---
+# --- Documentation ---
 doc_sync: advisory
