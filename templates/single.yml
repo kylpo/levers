@@ -16,8 +16,8 @@ modes:
     overrides:
       test_automation: off
       test_coverage: off
-      verification_strategy: none
       manual_qa_capture: off
+      verification_strategy: none
       ci_gate: none
       code_review: none
       doc_sync: none
@@ -61,8 +61,8 @@ bug_intake: manual
 # --- Testing & QA ---
 test_automation: on
 test_coverage: on
-verification_strategy: per_feature
 manual_qa_capture: on
+verification_strategy: per_feature
 
 # --- Automation ---
 code_review: none

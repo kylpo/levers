@@ -2,16 +2,13 @@
 # Schema reference: docs/spec.md
 # Validate:        `levers validate --role package`
 #
-# Declares PACKAGE-SCOPED keys (lifecycle, release, QA discipline) and
+# Declares PACKAGE-SCOPED keys (lifecycle, release, versioning) and
 # optionally overrides EITHER-SCOPED keys from the root .levers.yml.
 # REPO-SCOPED keys (team_mode, branch_strategy, etc.) live at the root
 # and must NOT appear here.
 
 # --- Project context (package-scoped) ---
 lifecycle_stage: pre_launch
-
-# --- Testing & QA (package-scoped) ---
-manual_qa_capture: on
 
 # --- Release & versioning (package-scoped) ---
 release_model: batched_feature_scoped
@@ -23,6 +20,7 @@ changelog_style: curated
 # planning_horizon: phased
 # test_automation: on
 # test_coverage: on
+# manual_qa_capture: on
 # verification_strategy: per_feature
 # code_review: none
 # code_review_concurrency: series

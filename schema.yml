@@ -125,6 +125,16 @@ levers:
       off: Coverage is not tracked; tests exist but the bar is "they pass."
       on: Every change keeps or improves coverage; regressions block merge.
 
+  manual_qa_capture:
+    scope: either
+    category: testing
+    values: [off, on]
+    strictness: [on, off]
+    description: Whether manual QA sessions are recorded for future reference.
+    value_descriptions:
+      off: Manual QA is done but not preserved.
+      on: Manual QA results are written down (notes, screenshots, transcripts).
+
   verification_strategy:
     scope: either
     category: testing
@@ -136,16 +146,6 @@ levers:
       per_ticket: Every ticket is verified before it closes.
       per_feature: Verification happens once per feature, after its tickets land.
       per_epic: Verification happens once per epic, after its features land.
-
-  manual_qa_capture:
-    scope: package
-    category: testing
-    values: [off, on]
-    strictness: [on, off]
-    description: Whether manual QA sessions are recorded for future reference.
-    value_descriptions:
-      off: Manual QA is done but not preserved.
-      on: Manual QA results are written down (notes, screenshots, transcripts).
 
   # --- Automation ---
   code_review:

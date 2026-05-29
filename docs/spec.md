@@ -61,8 +61,8 @@ Source of truth: [`schema.yml`](../schema.yml). The tables below are kept in syn
 Every lever has a **scope** attribute — one of `repo`, `package`, or `either`:
 
 - **`repo`** — declared only at the root `.levers.yml`. These describe how humans and tools operate on the whole repo (team shape, collaboration rules, branch model). Declaring a `repo`-scoped key at a package fails validation.
-- **`package`** — declared only at per-package `.levers.yml` files in monorepos. These describe properties that vary per deliverable (lifecycle stage, release model, QA discipline). Declaring a `package`-scoped key at root fails validation. In a single-repo setup, the repo *is* the only package, and `package`-scoped keys are declared at the root file (validated under `--role single`).
-- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. Useful for levers that often apply repo-wide but sometimes need local override (test strategy, CI gate, auto-merge, design discipline).
+- **`package`** — declared only at per-package `.levers.yml` files in monorepos. These describe properties that vary per deliverable (lifecycle stage, release model, versioning). Declaring a `package`-scoped key at root fails validation. In a single-repo setup, the repo *is* the only package, and `package`-scoped keys are declared at the root file (validated under `--role single`).
+- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. Useful for levers that often apply repo-wide but sometimes need local override (test strategy, QA discipline, CI gate, auto-merge, design discipline).
 
 See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
@@ -87,8 +87,8 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 |---|---|---|
 | `test_automation` | `either` | `off` \| `on` |
 | `test_coverage` | `either` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
+| `manual_qa_capture` | `either` | `off` \| `on` |
 | `verification_strategy` | `either` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
-| `manual_qa_capture` | `package` | `off` \| `on` |
 
 ### Automation
 
@@ -137,8 +137,8 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | Scope | Keys |
 |---|---|
 | `repo` | `team_mode`, `review_cadence`, `bug_intake`, `branch_strategy`, `workspace_isolation` |
-| `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `manual_qa_capture`, `changelog_style` |
-| `either` | `planning_horizon`, `test_automation`, `test_coverage`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
+| `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
+| `either` | `planning_horizon`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
 
 ## Monorepo layout
 

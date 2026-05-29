@@ -22,6 +22,7 @@ modes:
     overrides:
       test_automation: off
       test_coverage: off
+      manual_qa_capture: off
       verification_strategy: none
       ci_gate: none
       code_review: none
@@ -65,6 +66,7 @@ bug_intake: manual                # repo-scoped
 # --- Testing & QA (either-scoped defaults) ---
 test_automation: on
 test_coverage: on
+manual_qa_capture: on
 verification_strategy: per_feature
 
 # --- Automation (either-scoped defaults) ---
