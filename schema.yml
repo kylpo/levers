@@ -60,6 +60,16 @@ levers:
       post_launch: Live, but still iterating fast. Stricter gates; real users at risk.
       mature: Stable, widely used. Strictest gates; changes carry the most weight.
 
+  risk_classification:
+    scope: either
+    category: lifecycle
+    values: [off, on]
+    strictness: [on, off]
+    description: Whether changes are analyzed and labelled by risk level (low-risk / high-risk).
+    value_descriptions:
+      off: Changes are not risk-labelled.
+      on: Each change is analyzed and tagged low-risk or high-risk.
+
   # --- Team & collaboration ---
   team_mode:
     scope: repo
@@ -132,12 +142,12 @@ levers:
   manual_qa_capture:
     scope: package
     category: quality
-    values: [on, off]
+    values: [off, on]
     strictness: [on, off]
     description: Whether manual QA sessions are recorded for future reference.
     value_descriptions:
-      on: Manual QA results are written down (notes, screenshots, transcripts).
       off: Manual QA is done but not preserved.
+      on: Manual QA results are written down (notes, screenshots, transcripts).
 
   ci_gate:
     scope: either
@@ -170,14 +180,13 @@ levers:
   code_review:
     scope: either
     category: quality
-    values: [none, inline, subagent, subagent_advisory]
-    strictness: [subagent_advisory, subagent, inline, none]
+    values: [none, advisory, apply]
+    strictness: [apply, advisory, none]
     description: Who reviews code before it can merge.
     value_descriptions:
       none: Author merges their own changes; no review step.
-      inline: A human reviews the PR before merge.
-      subagent: An AI subagent reviews and can block merge.
-      subagent_advisory: An AI subagent reviews; comments only, does not block.
+      advisory: Changes are reviewed; findings are surfaced as comments and don't block merge.
+      apply: Changes are reviewed and fixes are applied directly; review can block merge.
 
   code_review_concurrency:
     scope: either
@@ -249,13 +258,13 @@ levers:
   agent_auto_merge:
     scope: either
     category: automation
-    values: [none, low_risk_only, all]
-    strictness: [none, low_risk_only, all]
+    values: [off, low_risk_only, on]
+    strictness: [off, low_risk_only, on]
     description: Whether agent-authored PRs may merge themselves.
     value_descriptions:
-      none: Agents never auto-merge; a human always clicks merge.
+      off: Agents never auto-merge; a human always clicks merge.
       low_risk_only: Agents may auto-merge low-risk changes (e.g., dep bumps, doc-only).
-      all: Agents auto-merge anything that passes gates.
+      on: Agents auto-merge anything that passes gates.
 
   bug_intake:
     scope: repo
@@ -308,14 +317,13 @@ levers:
   doc_sync:
     scope: either
     category: documentation
-    values: [none, inline, subagent, subagent_advisory]
-    strictness: [subagent_advisory, subagent, inline, none]
+    values: [none, advisory, apply]
+    strictness: [apply, advisory, none]
     description: Who keeps documentation in sync with code changes.
     value_descriptions:
       none: Docs drift freely; nobody is responsible for keeping them current.
-      inline: Doc updates land in the same PR as the code change.
-      subagent: An AI subagent updates docs and can block merge if they drift.
-      subagent_advisory: An AI subagent flags doc drift; humans decide whether to act.
+      advisory: Doc drift is flagged for humans to act on; nothing changes automatically.
+      apply: Doc updates are applied directly to keep docs in sync; can block merge on drift.
 
   # --- Workspace ---
   workspace_isolation:

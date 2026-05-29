@@ -26,7 +26,7 @@ modes:
       ci_gate: none
       code_review: none
       doc_sync: none
-      agent_auto_merge: all
+      agent_auto_merge: on
       planning_horizon: just_in_time
 
   greenfield:
@@ -37,8 +37,8 @@ modes:
       test_coverage: off
       verification_strategy: per_feature
       ci_gate: advisory
-      code_review: inline
-      doc_sync: inline
+      code_review: advisory
+      doc_sync: advisory
       planning_horizon: just_in_time
 
   brownfield:
@@ -50,8 +50,8 @@ modes:
       verification_strategy: per_ticket
       ci_gate: gates_merge
       ci_retry: 1
-      code_review: subagent
-      doc_sync: subagent
+      code_review: apply
+      doc_sync: apply
       planning_horizon: phased
 
 # --- Team & collaboration (repo-scoped) ---
@@ -82,7 +82,7 @@ agent_breadcrumb_commits: off     # either-scoped default
 agent_breadcrumb_comments: off    # either-scoped default
 
 # --- Documentation (either-scoped default) ---
-doc_sync: inline
+doc_sync: advisory
 
 # --- Workspace (repo-scoped) ---
 workspace_isolation: branch

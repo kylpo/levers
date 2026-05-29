@@ -95,7 +95,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `manual_qa_capture` | `package` | `on` \| `off` |
 | `ci_gate` | `either` | `none` \| `advisory` \| `gates_merge` |
 | `ci_retry` | `either` | `off` \| `1` \| `2` \| `3` \| `until_fixed` (enabled only when `ci_gate: gates_merge`; otherwise reads as `off`) |
-| `code_review` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
+| `code_review` | `either` | `none` \| `advisory` \| `apply` |
 | `code_review_concurrency` | `either` | `series` \| `parallel` |
 
 ### Release & delivery
@@ -111,7 +111,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Key | Scope | Values |
 |---|---|---|
-| `agent_auto_merge` | `either` | `none` \| `low_risk_only` \| `all` |
+| `agent_auto_merge` | `either` | `off` \| `low_risk_only` \| `on` |
 | `bug_intake` | `repo` | `manual` \| `funneled` |
 | `agent_breadcrumb_commits` | `either` | `off` \| `on` |
 | `agent_breadcrumb_comments` | `either` | `off` \| `on` |
@@ -121,7 +121,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | Key | Scope | Values |
 |---|---|---|
 | `changelog_style` | `package` | `commit_log` \| `curated` |
-| `doc_sync` | `either` | `none` \| `inline` \| `subagent` \| `subagent_advisory` |
+| `doc_sync` | `either` | `none` \| `advisory` \| `apply` |
 
 ### Workspace
 
@@ -177,7 +177,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 
 | Lever | Strictness order (strictest → loosest) |
 |---|---|
-| `agent_auto_merge` | `none` → `low_risk_only` → `all` |
+| `agent_auto_merge` | `off` → `low_risk_only` → `on` |
 | `agent_breadcrumb_commits` | `on` → `off` |
 | `agent_breadcrumb_comments` | `on` → `off` |
 | `ci_gate` | `gates_merge` → `advisory` → `none` |
@@ -189,8 +189,8 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `manual_qa_capture` | `on` → `off` |
 | `release_model` | `release_branch` → `batched_timeline` → `batched_feature_scoped` → `continuous` |
 | `planning_horizon` | `big_bang` → `phased` → `just_in_time` |
-| `doc_sync` | `subagent_advisory` → `subagent` → `inline` → `none` |
-| `code_review` | `subagent_advisory` → `subagent` → `inline` → `none` |
+| `doc_sync` | `apply` → `advisory` → `none` |
+| `code_review` | `apply` → `advisory` → `none` |
 | `code_review_concurrency` | `series` → `parallel` |
 | `pr_merge_method` | `merge` → `rebase` → `squash` |
 

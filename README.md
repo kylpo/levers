@@ -120,7 +120,7 @@ Rare, specialized — it's the cross-cutting fallback when a change set spans mu
 Concrete shape:
 
 - A PR touches files in `apps/mobile` and `packages/shared`. The auto-merge gate has to make **one** decision for the whole PR — it can't merge mobile but block shared.
-- The gate calls `levers merge-strictest apps/mobile packages/shared --keys agent_auto_merge` and gets the strictest value across the two (`none` beats `low_risk_only` beats `all`).
+- The gate calls `levers merge-strictest apps/mobile packages/shared --keys agent_auto_merge` and gets the strictest value across the two (`off` beats `low_risk_only` beats `on`).
 - Same shape for unattended CI gates, batch operations, anything that produces a single yes/no over a multi-package diff.
 
 The spec calls per-package splitting the preferred path — let each package decide for its own files. `merge-strictest` is the safety valve when splitting isn't possible.

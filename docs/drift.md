@@ -63,11 +63,11 @@ levers audit --strict         # exit non-zero on any warning (intended for CI)
 
 ### `code_review` + `code_review_concurrency` contradiction (root or package)
 
-> declared `code_review: subagent` with `code_review_concurrency: parallel` — reviewers writing to the same files concurrently can produce conflicting edits
+> declared `code_review: apply` with `code_review_concurrency: parallel` — reviewers writing to the same files concurrently can produce conflicting edits
 
-**Trigger:** `code_review: subagent` (reviewers apply edits directly) combined with `code_review_concurrency: parallel`. Concurrent reviewers writing the same files race on overlapping edits.
+**Trigger:** `code_review: apply` (reviewers apply edits directly) combined with `code_review_concurrency: parallel`. Concurrent reviewers writing the same files race on overlapping edits.
 
-**Action:** flip concurrency to `series` (reviewers run one at a time, each seeing the prior reviewer's fixes), or switch `code_review` to `subagent_advisory` (reviewers return manifests; the dispatcher applies them — no write contention, so `parallel` is safe).
+**Action:** flip concurrency to `series` (reviewers run one at a time, each seeing the prior reviewer's fixes), or switch `code_review` to `advisory` (reviewers surface findings as comments rather than applying them — no write contention, so `parallel` is safe).
 
 ### `agent_breadcrumb_commits` + active pre-commit hook (root or package)
 

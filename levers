@@ -2011,17 +2011,17 @@ def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
                 "(or override per-package).",
             ))
 
-    # code_review: subagent + code_review_concurrency: parallel
+    # code_review: apply + code_review_concurrency: parallel
     if (
-        data.get("code_review") == "subagent"
+        data.get("code_review") == "apply"
         and data.get("code_review_concurrency") == "parallel"
     ):
         warnings.append((
             "root",
-            "declared `code_review: subagent` with `code_review_concurrency: parallel` "
+            "declared `code_review: apply` with `code_review_concurrency: parallel` "
             "— reviewers writing to the same files concurrently can produce conflicting "
             "edits; flip concurrency to `series`, or switch code_review to "
-            "`subagent_advisory` (dispatcher applies, no write contention).",
+            "`advisory` (findings surfaced as comments, no write contention).",
         ))
 
     # agent_breadcrumb_commits: on + active pre-commit hook
@@ -2129,17 +2129,17 @@ def _audit_package(repo_root: Path, pkg_dir: Path) -> list[tuple[str, str]]:
             "— these contradict.",
         ))
 
-    # code_review: subagent + code_review_concurrency: parallel
+    # code_review: apply + code_review_concurrency: parallel
     if (
-        data.get("code_review") == "subagent"
+        data.get("code_review") == "apply"
         and data.get("code_review_concurrency") == "parallel"
     ):
         warnings.append((
             rel,
-            "declared `code_review: subagent` with `code_review_concurrency: parallel` "
+            "declared `code_review: apply` with `code_review_concurrency: parallel` "
             "— reviewers writing to the same files concurrently can produce conflicting "
             "edits; flip concurrency to `series`, or switch code_review to "
-            "`subagent_advisory` (dispatcher applies, no write contention).",
+            "`advisory` (findings surfaced as comments, no write contention).",
         ))
 
     # agent_breadcrumb_commits: on + active pre-commit hook
