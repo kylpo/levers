@@ -60,6 +60,15 @@ levers:
       post_launch: Live, but still iterating fast. Stricter gates; real users at risk.
       mature: Stable, widely used. Strictest gates; changes carry the most weight.
 
+  repo_layout:
+    scope: repo
+    category: context
+    values: [single, monorepo]
+    description: Whether this repo houses one package or many. Determines whether per-package .levers.yml overrides apply.
+    value_descriptions:
+      single: One package in the repo; the root .levers.yml is the whole story.
+      monorepo: Many packages under one root; packages may override repo-wide defaults.
+
   team_mode:
     scope: repo
     category: context

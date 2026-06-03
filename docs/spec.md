@@ -70,6 +70,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Key | Scope | Values |
 |---|---|---|
+| `repo_layout` | `repo` | `single` \| `monorepo` |
 | `lifecycle_stage` | `package` | `prototype` \| `pre_launch` \| `post_launch` \| `mature` |
 | `team_mode` | `repo` | `solo` \| `small_team` \| `large_team` |
 | `review_cadence` | `repo` | `sync` \| `async` |
@@ -136,7 +137,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Scope | Keys |
 |---|---|
-| `repo` | `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
+| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
 | `either` | _(none — supported but unused; see scope notes above)_ |
 

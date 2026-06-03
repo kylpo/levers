@@ -50,6 +50,7 @@ modes:
       planning_horizon: phased
 
 # --- Project context ---
+repo_layout: single
 lifecycle_stage: pre_launch
 team_mode: solo
 review_cadence: async

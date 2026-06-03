@@ -56,6 +56,7 @@ modes:
       planning_horizon: phased
 
 # --- Project context (repo-scoped) ---
+repo_layout: monorepo
 team_mode: solo
 review_cadence: async
 
