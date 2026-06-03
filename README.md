@@ -1,5 +1,7 @@
 # levers
 
+> Feature flags for your tools and agent skills
+
 A small file format and CLI for encoding the *policy-level shape* of a software project — the answers to "do we wait for CI?", "must `main` be always-deployable?", "is `agent_auto_merge` allowed here?" — in a checked-in file that tools and humans can both read reliably.
 
 ```yaml
