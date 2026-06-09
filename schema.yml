@@ -109,6 +109,16 @@ levers:
       manual: Bugs land as ad-hoc messages or issues; no fixed intake path.
       funneled: Bugs go through a defined intake (form, triage queue, etc.).
 
+  ac_validation:
+    scope: repo
+    category: planning
+    values: [off, on]
+    strictness: [on, off]
+    description: Whether each acceptance criterion is checked against the change before work is considered done.
+    value_descriptions:
+      off: Acceptance criteria are not explicitly validated; "looks done" is enough.
+      on: Every acceptance criterion is verified against the post-change codebase before closing.
+
   # --- Testing & QA ---
   test_automation:
     scope: repo

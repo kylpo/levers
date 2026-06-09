@@ -91,7 +91,7 @@ Full mechanics in [docs/spec.md](./docs/spec.md).
 The lever set is small (~27 keys) and chosen to cover policy that **can't be reliably inferred from the repo**. Each key has a strict enum of allowed values, a *scope* (`repo`, `package`, or `either`), and for the values that admit a "strictest" answer, a strictness ordering used for cross-package merges.
 
 - **Project context** — `repo_layout`, `lifecycle_stage`, `team_mode`, `review_cadence`
-- **Planning & intake** — `planning_horizon`, `bug_intake`
+- **Planning & intake** — `planning_horizon`, `bug_intake`, `ac_validation`
 - **Testing & QA** — `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`
 - **Automation** — `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`
 - **Version control & PRs** — `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`
