@@ -343,6 +343,16 @@ levers:
       low_risk_only: Agents may auto-merge low-risk changes (e.g., dep bumps, doc-only).
       on: Agents auto-merge anything that passes gates.
 
+  agent_retro:
+    scope: repo
+    category: agent
+    values: [off, on]
+    strictness: [on, off]
+    description: Whether agents run a retrospective on their work session.
+    value_descriptions:
+      off: Agents finish without a retrospective step.
+      on: Agents run a retrospective to surface friction and improvements after a session.
+
   # --- Documentation ---
   doc_sync:
     scope: repo

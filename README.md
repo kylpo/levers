@@ -96,7 +96,7 @@ The lever set is small (~27 keys) and chosen to cover policy that **can't be rel
 - **Automation** — `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`
 - **Version control & PRs** — `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`
 - **Release & versioning** — `release_model`, `release_cadence`, `versioning`, `changelog_style`
-- **Agent behavior** — `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`
+- **Agent behavior** — `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`
 - **Documentation** — `doc_sync`
 
 Schema tables with every enum value: [docs/spec.md § Schema](./docs/spec.md#schema). The full tradeoff space behind each lever (when to pick which value, and why): [docs/reference.md](./docs/reference.md).

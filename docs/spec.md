@@ -127,6 +127,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `agent_breadcrumb_commits` | `repo` | `off` \| `on` |
 | `agent_breadcrumb_comments` | `repo` | `off` \| `on` |
 | `agent_auto_merge` | `repo` | `off` \| `low_risk_only` \| `on` |
+| `agent_retro` | `repo` | `off` \| `on` |
 
 ### Documentation
 
@@ -138,7 +139,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Scope | Keys |
 |---|---|
-| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `doc_sync` |
+| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`, `doc_sync` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
 | `either` | _(none — supported but unused; see scope notes above)_ |
 
@@ -185,6 +186,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `agent_auto_merge` | `off` → `low_risk_only` → `on` |
 | `agent_breadcrumb_commits` | `on` → `off` |
 | `agent_breadcrumb_comments` | `on` → `off` |
+| `agent_retro` | `on` → `off` |
 | `ac_validation` | `on` → `off` |
 | `ci_gate` | `gates_merge` → `advisory` → `none` |
 | `ci_retry` | `off` → `1` → `2` → `3` → `until_fixed` |

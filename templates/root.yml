@@ -63,6 +63,7 @@ review_cadence: async
 # --- Planning & intake ---
 planning_horizon: phased
 bug_intake: manual
+ac_validation: off
 
 # --- Testing & QA ---
 test_automation: on
@@ -87,6 +88,7 @@ workspace_isolation: branch
 agent_breadcrumb_commits: off
 agent_breadcrumb_comments: off
 agent_auto_merge: low_risk_only
+agent_retro: off
 
 # --- Documentation ---
 doc_sync: advisory
