@@ -71,6 +71,9 @@ test_coverage: on
 manual_qa_capture: on
 verification_strategy: per_feature
 
+# --- Verification ---
+ac_graders: 1
+
 # --- Automation ---
 code_review: none
 code_review_concurrency: series

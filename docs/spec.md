@@ -92,6 +92,12 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 | `manual_qa_capture` | `repo` | `off` \| `on` |
 | `verification_strategy` | `repo` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
 
+### Verification
+
+| Key | Scope | Values |
+|---|---|---|
+| `ac_graders` | `repo` | `1` \| `2` \| `3` \| `4` \| `5` |
+
 ### Automation
 
 | Key | Scope | Values |
@@ -139,7 +145,7 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Scope | Keys |
 |---|---|
-| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`, `doc_sync` |
+| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `ac_graders`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`, `doc_sync` |
 | `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
 | `either` | _(none — supported but unused; see scope notes above)_ |
 
@@ -188,6 +194,7 @@ When `levers merge-strictest` is called with paths spanning multiple packages, e
 | `agent_breadcrumb_comments` | `on` → `off` |
 | `agent_retro` | `on` → `off` |
 | `ac_validation` | `on` → `off` |
+| `ac_graders` | `5` → `4` → `3` → `2` → `1` |
 | `ci_gate` | `gates_merge` → `advisory` → `none` |
 | `ci_retry` | `off` → `1` → `2` → `3` → `until_fixed` |
 | `test_automation` | `on` → `off` |

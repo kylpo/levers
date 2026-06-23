@@ -35,6 +35,8 @@ categories:
     label: Planning & intake
   testing:
     label: Testing & QA
+  verification:
+    label: Verification
   automation:
     label: Automation
   vcs:
@@ -165,6 +167,20 @@ levers:
       per_ticket: Every ticket is verified before it closes.
       per_feature: Verification happens once per feature, after its tickets land.
       per_epic: Verification happens once per epic, after its features land.
+
+  # --- Verification ---
+  ac_graders:
+    scope: repo
+    category: verification
+    values: [1, 2, 3, 4, 5]
+    strictness: [5, 4, 3, 2, 1]
+    description: How many independent graders validate each acceptance criterion.
+    value_descriptions:
+      1: A single grader validates each acceptance criterion.
+      2: Two independent graders validate each acceptance criterion.
+      3: Three independent graders validate each acceptance criterion.
+      4: Four independent graders validate each acceptance criterion.
+      5: Five independent graders validate each acceptance criterion.
 
   # --- Automation ---
   code_review:

@@ -93,6 +93,7 @@ The lever set is small (~27 keys) and chosen to cover policy that **can't be rel
 - **Project context** — `repo_layout`, `lifecycle_stage`, `team_mode`, `review_cadence`
 - **Planning & intake** — `planning_horizon`, `bug_intake`, `ac_validation`
 - **Testing & QA** — `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`
+- **Verification** — `ac_graders`
 - **Automation** — `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`
 - **Version control & PRs** — `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`
 - **Release & versioning** — `release_model`, `release_cadence`, `versioning`, `changelog_style`
