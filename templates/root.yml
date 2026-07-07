@@ -6,9 +6,9 @@
 #                  in the appropriate DECISIONS.md.
 #
 # This file declares REPO-SCOPED keys (how humans/agents operate on the
-# whole repo) — every operational lever lives here. Per-package
-# .levers.yml files at apps/*/.levers.yml, packages/*/.levers.yml etc.
-# declare only PACKAGE-SCOPED keys (lifecycle, release, versioning).
+# whole repo). Per-package .levers.yml files at apps/*/.levers.yml,
+# packages/*/.levers.yml etc. declare PACKAGE-SCOPED keys (lifecycle,
+# release, versioning, and testing: test_automation / test_coverage).
 
 # Active mode — temporary overlay on the declared values below. Empty = no mode.
 # Modes are root-only (no `mode:` / `modes:` in package files).
@@ -66,8 +66,8 @@ bug_intake: manual
 ac_validation: off
 
 # --- Testing & QA ---
-test_automation: on
-test_coverage: on
+# test_automation / test_coverage are package-scoped — declared in each
+# package's .levers.yml, not here.
 manual_qa_capture: on
 verification_strategy: per_feature
 

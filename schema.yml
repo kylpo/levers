@@ -123,7 +123,7 @@ levers:
 
   # --- Testing & QA ---
   test_automation:
-    scope: repo
+    scope: package
     category: testing
     values: [off, on]
     strictness: [on, off]
@@ -133,7 +133,7 @@ levers:
       on: Changes ship with automated tests.
 
   test_coverage:
-    scope: repo
+    scope: package
     category: testing
     values: [off, on]
     strictness: [on, off]

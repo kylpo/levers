@@ -2,14 +2,17 @@
 # Schema reference: docs/spec.md
 # Validate:        `levers validate --role package`
 #
-# Declares PACKAGE-SCOPED keys (lifecycle, release, versioning) only.
-# Every operational lever is REPO-SCOPED and lives at the root
-# .levers.yml (team_mode, test_automation, ci_gate, etc.) — those must
-# NOT appear here. (The `either` scope still exists for future use, but
-# no lever currently uses it, so there are no per-package overrides.)
+# Declares PACKAGE-SCOPED keys (lifecycle, release, versioning, testing).
+# Repo-wide operational levers (team_mode, ci_gate, code_review, etc.)
+# are REPO-SCOPED and live at the root .levers.yml — those must NOT
+# appear here.
 
 # --- Project context (package-scoped) ---
 lifecycle_stage: pre_launch
+
+# --- Testing & QA (package-scoped) ---
+test_automation: on
+test_coverage: on
 
 # --- Release & versioning (package-scoped) ---
 release_model: batched_feature_scoped

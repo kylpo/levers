@@ -62,7 +62,7 @@ Every lever has a **scope** attribute — one of `repo`, `package`, or `either`:
 
 - **`repo`** — declared only at the root `.levers.yml`. These describe how humans and tools operate on the whole repo (team shape, collaboration rules, branch model). Declaring a `repo`-scoped key at a package fails validation.
 - **`package`** — declared only at per-package `.levers.yml` files in monorepos. These describe properties that vary per deliverable (lifecycle stage, release model, versioning). Declaring a `package`-scoped key at root fails validation. In a single-repo setup, the repo *is* the only package, and `package`-scoped keys are declared at the root file (validated under `--role single`).
-- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. A supported scope for levers that often apply repo-wide but sometimes need local override. **No lever currently uses `either`** — per-package overrides were judged not worth the overhead, so every operational lever is `repo`-scoped. The mechanism remains available for reintroducing an overridable lever later.
+- **`either`** — may be declared at root with a project-wide default, and optionally overridden per-package. A supported scope for levers that often apply repo-wide but sometimes need local override. **No lever currently uses `either`** — per-package overrides were judged not worth the overhead. The mechanism remains available for reintroducing an overridable lever later.
 
 See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
@@ -87,8 +87,8 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Key | Scope | Values |
 |---|---|---|
-| `test_automation` | `repo` | `off` \| `on` |
-| `test_coverage` | `repo` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
+| `test_automation` | `package` | `off` \| `on` |
+| `test_coverage` | `package` | `off` \| `on` (enabled only when `test_automation: on`; otherwise reads as `off`) |
 | `manual_qa_capture` | `repo` | `off` \| `on` |
 | `verification_strategy` | `repo` | `none` \| `per_ticket` \| `per_feature` \| `per_epic` |
 
@@ -145,8 +145,8 @@ See [Monorepo layout](#monorepo-layout) for how these resolve via `levers get`.
 
 | Scope | Keys |
 |---|---|
-| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `test_automation`, `test_coverage`, `manual_qa_capture`, `verification_strategy`, `ac_graders`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`, `doc_sync` |
-| `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style` |
+| `repo` | `repo_layout`, `team_mode`, `review_cadence`, `planning_horizon`, `bug_intake`, `ac_validation`, `manual_qa_capture`, `verification_strategy`, `ac_graders`, `code_review`, `code_review_concurrency`, `ci_gate`, `ci_retry`, `branch_strategy`, `pr_merge_method`, `risk_classification`, `ticket_claim`, `workspace_isolation`, `agent_breadcrumb_commits`, `agent_breadcrumb_comments`, `agent_auto_merge`, `agent_retro`, `doc_sync` |
+| `package` | `lifecycle_stage`, `release_model`, `release_cadence`, `versioning`, `changelog_style`, `test_automation`, `test_coverage` |
 | `either` | _(none — supported but unused; see scope notes above)_ |
 
 ## Monorepo layout
