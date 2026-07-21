@@ -93,6 +93,9 @@ class Schema:
         ms = raw.get("mode_schema") or {}
         self.mode_required: list[str] = list(ms.get("required") or ["overrides"])
         self.mode_optional: list[str] = list(ms.get("optional") or ["label", "description"])
+        # Stage profiles: {lifecycle_stage: {lever: default}}. lifecycle_stage supplies
+        # these levers' defaults, so they are non-required (see required_for).
+        self.stage_profiles: dict = raw.get("stage_profiles") or {}
 
     def mode_allowed_fields(self) -> set[str]:
         return set(self.mode_required) | set(self.mode_optional)
@@ -147,13 +150,43 @@ class Schema:
             reason = f"N/A while `{dep_key}` not in [{allowed}]"
         return False, reason
 
+    def stage_profile(self, stage) -> dict:
+        """The {lever: default} profile for a lifecycle_stage, or {} if none."""
+        return self.stage_profiles.get(stage) or {}
+
+    def stage_supplied_keys(self) -> set[str]:
+        """Levers whose default is supplied by lifecycle_stage (any stage profile)."""
+        keys: set[str] = set()
+        for profile in self.stage_profiles.values():
+            keys |= set((profile or {}).keys())
+        return keys
+
+    def is_optional(self, key: str) -> bool:
+        """True iff the lever opts out of required-key enforcement (soft-read knobs)."""
+        return bool(self.levers.get(key, {}).get("optional"))
+
+    def _requirable(self, key: str, cfg: dict) -> bool:
+        """A lever is required in a file only if it is neither stage-supplied (its
+        default comes from lifecycle_stage) nor explicitly optional (a soft-read knob)."""
+        return not cfg.get("optional") and key not in self.stage_supplied_keys()
+
     def required_for(self, role: Role) -> set[str]:
-        """Keys a .levers.yml of this role must declare."""
+        """Keys a .levers.yml of this role must declare. Stage-supplied and optional
+        levers are excluded — lifecycle_stage (or the soft-read default) supplies them."""
+        supplied = self.stage_supplied_keys()
+
+        def req(scopes: tuple[str, ...]) -> set[str]:
+            return {
+                k
+                for k, v in self.levers.items()
+                if v["scope"] in scopes and not v.get("optional") and k not in supplied
+            }
+
         if role is Role.single:
-            return {k for k, v in self.levers.items() if v["scope"] in ("repo", "package")}
+            return req(("repo", "package"))
         if role is Role.root:
-            return {k for k, v in self.levers.items() if v["scope"] == "repo"}
-        return {k for k, v in self.levers.items() if v["scope"] == "package"}
+            return req(("repo",))
+        return req(("package",))
 
     def forbidden_for(self, role: Role) -> set[str]:
         """Keys a .levers.yml of this role must NOT declare."""
@@ -1194,6 +1227,29 @@ def _apply_disabled_defaults(data: dict, schema: Schema) -> dict:
     return out
 
 
+def _apply_stage_profile(data: dict, schema: Schema) -> tuple[dict, dict]:
+    """Fill each stage-supplied safety lever from its lifecycle_stage default.
+
+    Only keys ABSENT from `data` are filled — an explicit `.levers.yml` value
+    always wins (explicit override › stage default). No lifecycle_stage in the
+    effective view, or a stage with no profile, fills nothing. Pure.
+
+    Returns (filled_view, fills) where `fills` is {lever: stage_default} for the
+    keys the profile actually supplied (provenance).
+    """
+    stage = data.get("lifecycle_stage")
+    profile = schema.stage_profile(stage)
+    if not profile:
+        return data, {}
+    out = dict(data)
+    fills: dict = {}
+    for key, value in profile.items():
+        if key not in out:
+            out[key] = value
+            fills[key] = value
+    return out, fills
+
+
 def _apply_mode_overlay(
     data: dict, root_data: dict, mode_override: Optional[str] = None
 ) -> tuple[dict, Optional[str], dict]:
@@ -1282,12 +1338,19 @@ def _resolve_one(
         merged = dict(root_data)
 
     pre_overlay = _strip_reserved(merged)
+    # Stage overlay: lifecycle_stage supplies each safety lever's default where the
+    # file declares none (explicit › stage default). Slots BETWEEN the explicit
+    # values and the mode overlay, so precedence is mode › explicit › stage default.
+    if schema is not None:
+        staged, stage_fills = _apply_stage_profile(pre_overlay, schema)
+    else:
+        staged, stage_fills = pre_overlay, {}
     if no_mode:
         active_mode, overrides_applied = None, {}
-        post_overlay = pre_overlay
+        post_overlay = staged
     else:
         post_overlay, active_mode, overrides_applied = _apply_mode_overlay(
-            pre_overlay, root_data
+            staged, root_data
         )
 
     if schema is not None:
@@ -1300,6 +1363,7 @@ def _resolve_one(
         "active_mode": active_mode,
         "mode_overrides": overrides_applied,
         "pre_overlay": pre_overlay,
+        "stage_fills": stage_fills,
     }
 
 
@@ -1975,6 +2039,31 @@ def _pre_commit_hook_active(repo_root: Path) -> bool:
         return False
 
 
+def _stage_override_warnings(
+    effective: dict, schema: Schema, ctx: str
+) -> list[tuple[str, str]]:
+    """Warn when a safety lever's explicit value diverges from its stage default.
+
+    `effective` must carry both `lifecycle_stage` and the safety levers (the root
+    file in a single-repo; the merged root+package view in a monorepo). Explicit
+    values always win — this is informational drift, not an error.
+    """
+    warnings: list[tuple[str, str]] = []
+    stage = effective.get("lifecycle_stage")
+    profile = schema.stage_profile(stage)
+    if not profile:
+        return warnings
+    for key, stage_default in profile.items():
+        if key in effective and effective[key] != stage_default:
+            warnings.append((
+                ctx,
+                f"declared `{key}: {effective[key]}` diverges from the `{stage}` "
+                f"stage default `{stage_default}` — explicit values always win, so this "
+                "is intentional drift; align it or record the deviation in DECISIONS.",
+            ))
+    return warnings
+
+
 def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
     """Drift warnings for the root .levers.yml. Returns (context, message) tuples."""
     warnings: list[tuple[str, str]] = []
@@ -2034,6 +2123,15 @@ def _audit_root(repo_root: Path) -> list[tuple[str, str]]:
             "`agent_breadcrumb_commits` to `off`, or have the hook short-circuit "
             "on agent-authored commits.",
         ))
+
+    # stage/override mismatch: a safety lever diverging from its lifecycle_stage
+    # default (single-repo — lifecycle_stage and the safety levers share this file).
+    try:
+        schema = _load_schema()
+    except typer.Exit:
+        schema = None
+    if schema is not None:
+        warnings.extend(_stage_override_warnings(data, schema, "root"))
 
     return warnings
 
@@ -2152,6 +2250,18 @@ def _audit_package(repo_root: Path, pkg_dir: Path) -> list[tuple[str, str]]:
             "`agent_breadcrumb_commits` to `off`, or have the hook short-circuit "
             "on agent-authored commits.",
         ))
+
+    # stage/override mismatch: the safety levers are repo-scoped and lifecycle_stage is
+    # package-scoped, so merge root + package to see both before comparing.
+    try:
+        schema = _load_schema()
+    except typer.Exit:
+        schema = None
+    if schema is not None:
+        root_file = repo_root / DEFAULT_FILENAME
+        root_data = load_yaml(root_file) if root_file.is_file() else {}
+        effective = {**root_data, **data}
+        warnings.extend(_stage_override_warnings(effective, schema, rel))
 
     return warnings
 

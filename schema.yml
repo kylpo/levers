@@ -182,6 +182,45 @@ levers:
       4: Four independent graders validate each acceptance criterion.
       5: Five independent graders validate each acceptance criterion.
 
+  req_graders:
+    scope: repo
+    category: verification
+    optional: true
+    values: [1, 2, 3, 4, 5]
+    strictness: [5, 4, 3, 2, 1]
+    description: How many independent graders sample the requirement flip verdict (planned → shipped). Reconciled worst-verdict — one dissent holds the flip.
+    value_descriptions:
+      1: A single grader decides each requirement flip.
+      2: Two graders sample the flip verdict; one dissent holds.
+      3: Three graders sample the flip verdict; one dissent holds.
+      4: Four graders sample the flip verdict; one dissent holds.
+      5: Five graders sample the flip verdict; one dissent holds.
+
+  spec_graders:
+    scope: repo
+    category: verification
+    optional: true
+    values: [1, 2, 3, 4, 5]
+    strictness: [5, 4, 3, 2, 1]
+    description: How many independent graders sample the refine-spec sweep. Reconciled by union on finding identity — a missed defect is silence, not a clean verdict.
+    value_descriptions:
+      1: A single grader sweeps the spec.
+      2: Two graders sweep the spec; findings unioned.
+      3: Three graders sweep the spec; findings unioned.
+      4: Four graders sweep the spec; findings unioned.
+      5: Five graders sweep the spec; findings unioned.
+
+  settle_up:
+    scope: repo
+    category: verification
+    values: [none, debt, gate]
+    strictness: [gate, debt, none]
+    description: How an attended session reconciles its work back to the spec before hand-off. Default follows lifecycle_stage (the stage profile).
+    value_descriptions:
+      none: Skip the settle session; close the bracket without a reconciliation pass.
+      debt: Run the settle session; unresolved drift is captured as debt (warns, never blocks).
+      gate: Run the settle session; any un-ratified drift blocks the hand-back until reconciled.
+
   # --- Automation ---
   code_review:
     scope: repo
@@ -231,6 +270,20 @@ levers:
       2: Retry the failing job up to twice before declaring failure.
       3: Retry the failing job up to three times before declaring failure.
       until_fixed: Keep retrying until the run passes. Use sparingly — masks real flake.
+
+  polish_parity_retry:
+    scope: repo
+    category: automation
+    optional: true
+    values: [off, 1, 2, 3, until_fixed]
+    strictness: [off, 1, 2, 3, until_fixed]
+    description: Retry budget for the polish Phase-C visual-parity fix loop when the production rebuild diverges from the approved winner. Mirrors ci_retry's grammar.
+    value_descriptions:
+      off: No retries; a divergence fails the parity gate immediately.
+      1: Retry the parity fix loop up to once.
+      2: Retry the parity fix loop up to twice.
+      3: Retry the parity fix loop up to three times.
+      until_fixed: Keep retrying until parity is reached. Use sparingly.
 
   # --- Version control & PRs ---
   branch_strategy:
@@ -380,3 +433,39 @@ levers:
       none: Docs drift freely; nobody is responsible for keeping them current.
       advisory: Doc drift is flagged for humans to act on; nothing changes automatically.
       apply: Doc updates are applied directly to keep docs in sync; can block merge on drift.
+
+# Stage profiles — lifecycle_stage supplies the DEFAULT for each safety lever
+# listed under a stage. A path that declares the lever explicitly overrides the
+# stage default; the profile only fills where the repo declares none. Because
+# lifecycle_stage supplies them, these levers are NOT required in a .levers.yml —
+# a file that sets lifecycle_stage resolves the whole safety posture from here.
+#
+# Consumed by `_resolve_one` (the stage overlay, between explicit values and the
+# mode overlay) and by `levers audit` (the stage/override-mismatch check). The
+# `settle_up` column is code-exact with the pipeline's defaultSettleTier.
+# Ratified in the pipeline's DEC-P015 (the D-19 lifecycle-dial closure).
+stage_profiles:
+  prototype:
+    code_review: none
+    doc_sync: none
+    verification_strategy: none
+    agent_auto_merge: "on"
+    settle_up: debt
+  pre_launch:
+    code_review: advisory
+    doc_sync: advisory
+    verification_strategy: per_ticket
+    agent_auto_merge: low_risk_only
+    settle_up: debt
+  post_launch:
+    code_review: apply
+    doc_sync: advisory
+    verification_strategy: per_ticket
+    agent_auto_merge: low_risk_only
+    settle_up: gate
+  mature:
+    code_review: apply
+    doc_sync: apply
+    verification_strategy: per_feature
+    agent_auto_merge: "off"
+    settle_up: gate

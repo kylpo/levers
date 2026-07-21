@@ -6,6 +6,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # --version / --help
@@ -314,6 +316,126 @@ def test_init_package_requires_root_levers(run, tmp_repo: Path) -> None:
     (tmp_repo / "apps").mkdir()
     r = run("init", "--role", "package", "--at", "apps", cwd=tmp_repo).assert_fails(2)
     assert "no root .levers.yml" in r.stderr
+
+
+# ---------------------------------------------------------------------------
+# stage profiles — lifecycle_stage supplies the safety-lever defaults
+# ---------------------------------------------------------------------------
+
+
+def test_stage_fills_settle_up_from_lifecycle(run, single_repo: Path) -> None:
+    # The single template declares no settle_up; lifecycle_stage: pre_launch
+    # supplies it via the stage profile.
+    r = run("get", "settle_up", cwd=single_repo).assert_ok()
+    assert r.stdout.strip() == "debt"
+
+
+def test_stage_fills_all_safety_levers(run, single_repo: Path) -> None:
+    # None of the five safety levers are declared in the template — each resolves
+    # from the pre_launch stage profile.
+    expected = {
+        "code_review": "advisory",
+        "doc_sync": "advisory",
+        "verification_strategy": "per_ticket",
+        "agent_auto_merge": "low_risk_only",
+        "settle_up": "debt",
+    }
+    for key, val in expected.items():
+        r = run("get", key, cwd=single_repo).assert_ok()
+        assert r.stdout.strip() == val, f"{key} resolved to {r.stdout.strip()!r}, want {val!r}"
+
+
+@pytest.mark.parametrize(
+    "stage,settle,code_review,auto_merge",
+    [
+        ("prototype", "debt", "none", "on"),
+        ("pre_launch", "debt", "advisory", "low_risk_only"),
+        ("post_launch", "gate", "apply", "low_risk_only"),
+        ("mature", "gate", "apply", "off"),
+    ],
+)
+def test_stage_rows(run, single_repo: Path, stage, settle, code_review, auto_merge) -> None:
+    run("set", "lifecycle_stage", stage, cwd=single_repo).assert_ok()
+    assert run("get", "settle_up", cwd=single_repo).stdout.strip() == settle
+    assert run("get", "code_review", cwd=single_repo).stdout.strip() == code_review
+    assert run("get", "agent_auto_merge", cwd=single_repo).stdout.strip() == auto_merge
+
+
+def test_explicit_safety_lever_overrides_stage_default(run, single_repo: Path) -> None:
+    # An explicit value always wins over the stage default (pre_launch → advisory).
+    run("set", "code_review", "apply", cwd=single_repo).assert_ok()
+    assert run("get", "code_review", cwd=single_repo).stdout.strip() == "apply"
+
+
+def test_stage_fill_inherits_at_package_path(run, monorepo: Path) -> None:
+    # The safety levers live in no file; each package's lifecycle_stage supplies
+    # them at a package path (root has no lifecycle_stage, so it can't fill there).
+    r = run("get", "code_review", "--at", "apps/mobile", cwd=monorepo).assert_ok()
+    assert r.stdout.strip() == "advisory"
+
+
+def test_minimal_file_without_safety_levers_validates(run, tmp_repo: Path) -> None:
+    # A file that omits the five safety levers still validates — lifecycle_stage
+    # supplies them, so required_for does not demand them.
+    (tmp_repo / ".levers.yml").write_text(
+        "repo_layout: single\n"
+        "lifecycle_stage: prototype\n"
+        "team_mode: solo\n"
+        "review_cadence: async\n"
+        "planning_horizon: phased\n"
+        "bug_intake: manual\n"
+        "ac_validation: off\n"
+        "test_automation: on\n"
+        "test_coverage: on\n"
+        "manual_qa_capture: on\n"
+        "ac_graders: 1\n"
+        "code_review_concurrency: series\n"
+        "ci_gate: none\n"
+        "ci_retry: off\n"
+        "branch_strategy: trunk_based\n"
+        "pr_merge_method: merge\n"
+        "risk_classification: off\n"
+        "ticket_claim: comment\n"
+        "workspace_isolation: branch\n"
+        "release_model: batched_feature_scoped\n"
+        "release_cadence: on_demand\n"
+        "versioning: semver\n"
+        "changelog_style: curated\n"
+        "agent_breadcrumb_commits: off\n"
+        "agent_breadcrumb_comments: off\n"
+        "agent_retro: off\n"
+    )
+    run("validate", cwd=tmp_repo).assert_ok()
+
+
+# ---------------------------------------------------------------------------
+# audit — stage/override mismatch
+# ---------------------------------------------------------------------------
+
+
+def test_audit_no_stage_mismatch_when_inherited(run, single_repo: Path) -> None:
+    # The template declares no explicit safety lever → nothing diverges.
+    subprocess.run(["git", "add", "."], cwd=single_repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=single_repo, check=True)
+    r = run("audit", cwd=single_repo).assert_ok()
+    assert "stage default" not in r.stdout
+
+
+def test_audit_flags_stage_override_mismatch(run, single_repo: Path) -> None:
+    # Explicitly pinning code_review below the pre_launch default surfaces drift.
+    run("set", "code_review", "none", cwd=single_repo).assert_ok()
+    subprocess.run(["git", "add", "."], cwd=single_repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=single_repo, check=True)
+    r = run("audit", cwd=single_repo).assert_ok()  # informational — exit 0
+    assert "stage default" in r.stdout
+    assert "code_review" in r.stdout
+
+
+def test_audit_stage_mismatch_strict_exits_nonzero(run, single_repo: Path) -> None:
+    run("set", "settle_up", "gate", cwd=single_repo).assert_ok()  # pre_launch default is debt
+    subprocess.run(["git", "add", "."], cwd=single_repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=single_repo, check=True)
+    run("audit", "--strict", cwd=single_repo).assert_fails(1)
 
 
 # ---------------------------------------------------------------------------

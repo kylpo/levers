@@ -77,6 +77,14 @@ levers audit --strict         # exit non-zero on any warning (intended for CI)
 
 **Action:** flip `agent_breadcrumb_commits` to `off`, or have the hook short-circuit on agent-authored commits (e.g., skip when the committer email matches a known agent, or when the commit message carries a breadcrumb marker).
 
+### stage/override mismatch (root or package)
+
+> declared `code_review: none` diverges from the `pre_launch` stage default `advisory`
+
+**Trigger:** a safety lever (`code_review`, `doc_sync`, `verification_strategy`, `agent_auto_merge`, `settle_up`) is declared explicitly with a value that differs from its `lifecycle_stage` stage-profile default (see `stage_profiles` in `schema.yml`). In a single-repo, both `lifecycle_stage` and the safety levers live in one file; in a monorepo, the check merges the root (repo-scoped safety levers) with the package (`lifecycle_stage`) before comparing.
+
+**Action:** explicit values always win — the stage profile only fills where the repo declares nothing — so this is intentional drift, not a bug. Either align the lever with the stage default (or drop it to inherit the default), advance `lifecycle_stage`, or record the deliberate deviation in `DECISIONS.md`. A repo that declares no explicit safety lever resolves its whole posture from the stage profile and never trips this check.
+
 ## Tag-matching convention
 
 Per-package tag checks (`lifecycle_stage`, `versioning`) use this convention to associate a tag with a package:

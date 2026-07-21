@@ -65,20 +65,30 @@ planning_horizon: phased
 bug_intake: manual
 ac_validation: off
 
+# --- Safety posture (supplied by each package's lifecycle_stage) ---
+# code_review, doc_sync, verification_strategy, agent_auto_merge, and settle_up
+# default off `lifecycle_stage` via the schema's stage_profiles. lifecycle_stage
+# is package-scoped, so in a monorepo each package's stage supplies its own
+# safety posture — omit them here (this template does) to inherit per package,
+# or declare one at root to pin it repo-wide (explicit always wins).
+
 # --- Testing & QA ---
 # test_automation / test_coverage are package-scoped — declared in each
 # package's .levers.yml, not here.
 manual_qa_capture: on
-verification_strategy: per_feature
 
 # --- Verification ---
+# ac_graders is required; req_graders / spec_graders are optional soft-read
+# knobs (omit to take their defaults).
 ac_graders: 1
+req_graders: 1
+spec_graders: 1
 
 # --- Automation ---
-code_review: none
 code_review_concurrency: series
 ci_gate: none
 ci_retry: off
+polish_parity_retry: 1
 
 # --- Version control & PRs ---
 branch_strategy: trunk_based
@@ -90,8 +100,4 @@ workspace_isolation: branch
 # --- Agent behavior ---
 agent_breadcrumb_commits: off
 agent_breadcrumb_comments: off
-agent_auto_merge: low_risk_only
 agent_retro: off
-
-# --- Documentation ---
-doc_sync: advisory
