@@ -213,12 +213,12 @@ levers:
   settle_up:
     scope: repo
     category: verification
-    values: [none, debt, gate]
-    strictness: [gate, debt, none]
+    values: [none, warn, gate]
+    strictness: [gate, warn, none]
     description: How an attended session reconciles its work back to the spec before hand-off. Default follows lifecycle_stage (the stage profile).
     value_descriptions:
       none: Skip the settle session; close the bracket without a reconciliation pass.
-      debt: Run the settle session; unresolved drift is captured as debt (warns, never blocks).
+      warn: Run the settle session; an unclean amendment or unresolved drift only WARNS — never blocks the hand-back.
       gate: Run the settle session; any un-ratified drift blocks the hand-back until reconciled.
 
   # --- Automation ---
@@ -450,13 +450,13 @@ stage_profiles:
     doc_sync: none
     verification_strategy: none
     agent_auto_merge: "on"
-    settle_up: debt
+    settle_up: warn
   pre_launch:
     code_review: advisory
     doc_sync: advisory
     verification_strategy: per_ticket
     agent_auto_merge: low_risk_only
-    settle_up: debt
+    settle_up: warn
   post_launch:
     code_review: apply
     doc_sync: advisory

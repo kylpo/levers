@@ -327,7 +327,7 @@ def test_stage_fills_settle_up_from_lifecycle(run, single_repo: Path) -> None:
     # The single template declares no settle_up; lifecycle_stage: pre_launch
     # supplies it via the stage profile.
     r = run("get", "settle_up", cwd=single_repo).assert_ok()
-    assert r.stdout.strip() == "debt"
+    assert r.stdout.strip() == "warn"
 
 
 def test_stage_fills_all_safety_levers(run, single_repo: Path) -> None:
@@ -338,7 +338,7 @@ def test_stage_fills_all_safety_levers(run, single_repo: Path) -> None:
         "doc_sync": "advisory",
         "verification_strategy": "per_ticket",
         "agent_auto_merge": "low_risk_only",
-        "settle_up": "debt",
+        "settle_up": "warn",
     }
     for key, val in expected.items():
         r = run("get", key, cwd=single_repo).assert_ok()
@@ -348,8 +348,8 @@ def test_stage_fills_all_safety_levers(run, single_repo: Path) -> None:
 @pytest.mark.parametrize(
     "stage,settle,code_review,auto_merge",
     [
-        ("prototype", "debt", "none", "on"),
-        ("pre_launch", "debt", "advisory", "low_risk_only"),
+        ("prototype", "warn", "none", "on"),
+        ("pre_launch", "warn", "advisory", "low_risk_only"),
         ("post_launch", "gate", "apply", "low_risk_only"),
         ("mature", "gate", "apply", "off"),
     ],
@@ -432,7 +432,7 @@ def test_audit_flags_stage_override_mismatch(run, single_repo: Path) -> None:
 
 
 def test_audit_stage_mismatch_strict_exits_nonzero(run, single_repo: Path) -> None:
-    run("set", "settle_up", "gate", cwd=single_repo).assert_ok()  # pre_launch default is debt
+    run("set", "settle_up", "gate", cwd=single_repo).assert_ok()  # pre_launch default is warn
     subprocess.run(["git", "add", "."], cwd=single_repo, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=single_repo, check=True)
     run("audit", "--strict", cwd=single_repo).assert_fails(1)
